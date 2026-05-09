@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": false,
+    "outDir": "dist-test",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/domain/**/*.ts", "src/bridge/**/*.ts", "src/renderer/state/**/*.ts", "test/**/*.ts"]
+}
