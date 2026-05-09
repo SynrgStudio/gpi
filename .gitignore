@@ -4,5 +4,7 @@ dist/
 *.log
 .DS_Store
 dist-test/
+release/
+.gpi-package/
 .env
 .env.*

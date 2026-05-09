@@ -17,7 +17,6 @@
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",
     "@vitejs/plugin-react": "latest",
-    "electron": "latest",
     "react": "latest",
     "react-dom": "latest",
     "typescript": "latest",
@@ -26,6 +25,7 @@
   "devDependencies": {
     "@electron/packager": "^20.0.0",
     "@types/node": "latest",
+    "electron": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest"
   },
