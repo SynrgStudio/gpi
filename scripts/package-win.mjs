@@ -35,6 +35,7 @@ await packager({
   overwrite: true,
   prune: true,
   asar: true,
+  extraResource: resolve(packageDir, "resources", "skills"),
   executableName: "GPi",
   appCopyright: "Copyright (c) Synrg Studio",
   appVersion: process.env.GPI_VERSION ?? process.env.npm_package_version ?? "0.0.1",
