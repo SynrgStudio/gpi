@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiPiUpdateResult, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -23,6 +23,7 @@ const WORKFLOW_SKILLS: readonly WorkflowSkillName[] = ["init-cont", "plan-cont",
 const PRIMARY_PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const LEGACY_PI_PACKAGE_NAME = "@mariozechner/pi-coding-agent";
 const PI_PACKAGE_NAMES: readonly string[] = [PRIMARY_PI_PACKAGE_NAME, LEGACY_PI_PACKAGE_NAME];
+const GPI_RELEASES_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/latest";
 
 void bridge.prewarm().then((snapshot) => {
   if (snapshot.status === "ready") {
@@ -87,6 +88,7 @@ function registerIpc(window: BrowserWindow): void {
   ipcMain.handle("gpi:get-workflow-skills-status", async () => getWorkflowSkillsStatus());
   ipcMain.handle("gpi:get-update-status", async () => getUpdateStatus());
   ipcMain.handle("gpi:update-pi", async () => updatePi());
+  ipcMain.handle("gpi:open-external", async (_event, url: unknown) => openExternalUrl(requireString(url, "url")));
   ipcMain.handle("gpi:get-workflow-skill-text", async (_event, skillName: unknown) => readBundledWorkflowSkill(requireWorkflowSkillName(skillName)));
   ipcMain.handle("gpi:install-workflow-skills", async () => installWorkflowSkills());
   ipcMain.handle("gpi:update-workflow-skills", async () => updateWorkflowSkills());
@@ -345,6 +347,8 @@ async function getWorkflowSkillStatus(skillName: WorkflowSkillName): Promise<Wor
 
 async function getUpdateStatus(): Promise<GpiUpdateStatus> {
   const appVersion = await readPackageVersion(join(currentDir, "../../package.json")) ?? app.getVersion();
+  const appRelease = await fetchLatestGpiRelease().catch(() => undefined);
+  const latestAppVersion = appRelease?.version;
   const packageInfo = await resolveInstalledPiPackage();
   const bundledPiVersion = packageInfo.packageJsonPath ? await readPackageVersion(packageInfo.packageJsonPath) : undefined;
   const installedPiVersion = await readInstalledPiCliVersion() ?? bundledPiVersion;
@@ -360,6 +364,10 @@ async function getUpdateStatus(): Promise<GpiUpdateStatus> {
 
   return {
     appVersion,
+    latestAppVersion,
+    appUpdateAvailable: appVersion && latestAppVersion ? compareSemver(appVersion, latestAppVersion) < 0 : undefined,
+    appReleaseUrl: appRelease?.releaseUrl,
+    appInstallerUrl: appRelease?.installerUrl,
     piPackageName: packageInfo.packageName,
     installedPiVersion,
     latestPiVersion,
@@ -367,6 +375,32 @@ async function getUpdateStatus(): Promise<GpiUpdateStatus> {
     piUpdateCommand: "pi update",
     checkedAt: Date.now(),
     error: installedPiVersion ? error : `Pi CLI/package not found: ${PI_PACKAGE_NAMES.join(" or ")}`,
+  };
+}
+
+async function openExternalUrl(url: string): Promise<GpiOpenExternalResult> {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Only http/https URLs can be opened externally");
+  await shell.openExternal(parsed.toString());
+  return { ok: true };
+}
+
+async function fetchLatestGpiRelease(): Promise<{ version: string; releaseUrl: string; installerUrl: string | undefined }> {
+  const response = await fetch(GPI_RELEASES_API_URL, { headers: { accept: "application/vnd.github+json" } });
+  if (!response.ok) throw new Error(`GitHub releases returned ${response.status.toString()}`);
+  const release = await response.json() as { html_url?: unknown; tag_name?: unknown; assets?: unknown };
+  const version = typeof release.tag_name === "string" ? release.tag_name.replace(/^v/, "") : undefined;
+  const releaseUrl = typeof release.html_url === "string" ? release.html_url : undefined;
+  if (!version || !releaseUrl) throw new Error("GitHub release payload is missing version or URL");
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  const installer = assets.find((asset): asset is { name?: unknown; browser_download_url?: unknown } => {
+    if (!isRecord(asset)) return false;
+    return typeof asset.name === "string" && asset.name.endsWith(".exe") && asset.name.includes("Setup");
+  });
+  return {
+    version,
+    releaseUrl,
+    installerUrl: typeof installer?.browser_download_url === "string" ? installer.browser_download_url : undefined,
   };
 }
 

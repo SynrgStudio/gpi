@@ -67,11 +67,28 @@ GPi must support from the beginning:
 npm run check
 npm run compile:electron
 npm run dev:electron
+npm run package:win
+npm run installer:win
 ```
 
 `npm run check` type-checks the scaffold. `npm run compile:electron` refreshes Electron main/preload output. `npm run dev:electron` compiles Electron code, starts Vite, and launches Electron against the local dev server.
 
+`npm run package:win` builds and packages the Windows Electron app under `release/GPi-win32-x64`. `npm run installer:win` additionally runs Inno Setup and writes `release/installer/GPi-Setup-<version>.exe`.
+
 The agent does not run `npm run dev`, `npm run dev:electron`, or `npm run build` unless explicitly requested.
+
+## Releases
+
+Push a semver tag to publish a Windows installer through GitHub Actions:
+
+```bash
+git tag v0.0.1
+git push origin v0.0.1
+```
+
+The release workflow runs checks, unit tests, packages GPi, builds the Inno installer, and attaches it to a GitHub Release.
+
+GPi Settings → Updates checks `https://github.com/SynrgStudio/gpi/releases` for newer app versions. When an installer asset is available, the `Update GPi` button opens the release installer download in the system browser.
 
 ## Project structure
 

@@ -548,6 +548,10 @@ export function App() {
       const message = error instanceof Error ? error.message : String(error);
       setUpdateStatus({
         appVersion: "unknown",
+        latestAppVersion: undefined,
+        appUpdateAvailable: undefined,
+        appReleaseUrl: undefined,
+        appInstallerUrl: undefined,
         piPackageName: "@earendil-works/pi-coding-agent",
         installedPiVersion: undefined,
         latestPiVersion: undefined,
@@ -559,6 +563,12 @@ export function App() {
     } finally {
       setUpdateStatusLoading(false);
     }
+  }
+
+  async function updateGpiFromSettings(): Promise<void> {
+    const url = updateStatus?.appInstallerUrl ?? updateStatus?.appReleaseUrl;
+    if (!window.gpi || !url) return;
+    await window.gpi.openExternal(url);
   }
 
   async function updatePiFromSettings(): Promise<void> {
@@ -1313,6 +1323,7 @@ export function App() {
           onPreviewWorkflowSkill={(skillName) => void previewWorkflowSkill(skillName)}
           onRefreshWorkflowSkills={() => void refreshSettingsStatus()}
           onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
+          onUpdateGpi={() => void updateGpiFromSettings()}
           onUpdatePi={() => void updatePiFromSettings()}
           onUpdateWorkflowSkills={() => void updateWorkflowSkills()}
         />
@@ -1492,6 +1503,7 @@ function SettingsDialog(props: {
   onPreviewWorkflowSkill: (skillName: WorkflowSkillName) => void;
   onRefreshWorkflowSkills: () => void;
   onRevertSafeEditsChange: (enabled: boolean) => void;
+  onUpdateGpi: () => void;
   onUpdatePi: () => void;
   onUpdateWorkflowSkills: () => void;
 }) {
@@ -1569,9 +1581,9 @@ function SettingsDialog(props: {
                   <span>Updates</span>
                   <strong>GPi and Pi.dev</strong>
                 </div>
-                <p>GPi runs locally from this checkout. Pi is loaded through the bundled coding-agent package and checked against npm for update availability.</p>
+                <p>GPi checks GitHub releases for app updates. Pi is loaded through the bundled coding-agent package and checked against npm for update availability.</p>
                 <div className="settings-status-list">
-                  <span><strong>GPi</strong><small>Version {props.updateStatus?.appVersion ?? "loading..."}</small></span>
+                  <span><strong>GPi</strong><small>{formatGpiUpdateStatus(props.updateStatus, props.updateStatusLoading)}</small></span>
                   <span>
                     <strong>Pi.dev package</strong>
                     <small>{formatPiUpdateStatus(props.updateStatus, props.updateStatusLoading)}</small>
@@ -1581,6 +1593,9 @@ function SettingsDialog(props: {
                 {props.piUpdateMessage ? <div className="settings-inline-warning">{props.piUpdateMessage}</div> : null}
                 <div className="settings-update-actions">
                   <button className="settings-secondary-button" onClick={props.onRefreshWorkflowSkills} title="Check GPi/Pi versions and update availability" type="button">{props.updateStatusLoading ? "Looking..." : "Look for Updates"}</button>
+                  {props.updateStatus?.appUpdateAvailable && (props.updateStatus.appInstallerUrl || props.updateStatus.appReleaseUrl) ? (
+                    <button className="settings-primary-button" onClick={props.onUpdateGpi} title="Download the latest GPi release" type="button">Update GPi</button>
+                  ) : null}
                   {props.updateStatus?.piUpdateAvailable ? (
                     <button className="settings-primary-button" disabled={props.piUpdateRunning} onClick={props.onUpdatePi} title="Run pi update" type="button">{props.piUpdateRunning ? "Updating Pi..." : "Update Pi"}</button>
                   ) : null}
@@ -1657,6 +1672,14 @@ function SettingsDialog(props: {
       </section>
     </div>
   );
+}
+
+function formatGpiUpdateStatus(status: GpiUpdateStatus | undefined, loading: boolean): string {
+  if (loading && !status) return "Checking GitHub releases...";
+  if (!status) return "Version status not loaded yet.";
+  const latest = status.latestAppVersion ? `latest ${status.latestAppVersion}` : "latest unknown";
+  const update = status.appUpdateAvailable === true ? "update available" : status.appUpdateAvailable === false ? "up to date" : "update status unknown";
+  return `installed ${status.appVersion} · ${latest} · ${update}`;
 }
 
 function formatPiUpdateStatus(status: GpiUpdateStatus | undefined, loading: boolean): string {

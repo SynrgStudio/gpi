@@ -104,6 +104,7 @@ describe("workspace store reducers", () => {
       durationMs: 12,
       resultSummary: "ok",
       fileChanges: [{ path: "note.md", kind: "modified", source: "pi-tool-args" }],
+      fileSnapshots: [],
       diffs: [{ path: "note.md", diff: "--- note.md\n+++ note.md\n+hello" }],
     });
     const withStats = reducePiEvent(finished, { type: "session_stats", sessionId: "session-a", summary: "stats: total 1" });

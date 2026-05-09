@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Resolve version
+        shell: pwsh
+        run: |
+          $version = "${env:GITHUB_REF_NAME}".TrimStart("v")
+          "GPI_VERSION=$version" >> $env:GITHUB_ENV
+      - run: npm ci
+      - run: npm run check
+      - run: npm run test:unit
+      - run: npm run package:win
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Build installer
+        shell: pwsh
+        run: |
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\gpi.iss
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/installer/GPi-Setup-${{ env.GPI_VERSION }}.exe
+          generate_release_notes: true

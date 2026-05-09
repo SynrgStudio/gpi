@@ -232,6 +232,10 @@ export interface WorkspaceSettings {
 
 export interface GpiUpdateStatus {
   appVersion: string;
+  latestAppVersion: string | undefined;
+  appUpdateAvailable: boolean | undefined;
+  appReleaseUrl: string | undefined;
+  appInstallerUrl: string | undefined;
   piPackageName: string;
   installedPiVersion: string | undefined;
   latestPiVersion: string | undefined;
@@ -239,6 +243,10 @@ export interface GpiUpdateStatus {
   piUpdateCommand: string;
   checkedAt: number;
   error: string | undefined;
+}
+
+export interface GpiOpenExternalResult {
+  ok: true;
 }
 
 export interface GpiPiUpdateResult {

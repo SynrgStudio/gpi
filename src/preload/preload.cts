@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiDiscoveredSession, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld("gpi", {
   getWorkflowSkillsStatus: () => ipcRenderer.invoke("gpi:get-workflow-skills-status") as Promise<WorkflowSkillsStatus>,
   getUpdateStatus: () => ipcRenderer.invoke("gpi:get-update-status") as Promise<GpiUpdateStatus>,
   updatePi: () => ipcRenderer.invoke("gpi:update-pi") as Promise<GpiPiUpdateResult>,
+  openExternal: (url: string) => ipcRenderer.invoke("gpi:open-external", url) as Promise<GpiOpenExternalResult>,
   getWorkflowSkillText: (skillName: WorkflowSkillName) => ipcRenderer.invoke("gpi:get-workflow-skill-text", skillName) as Promise<{ name: WorkflowSkillName; text: string }>,
   installWorkflowSkills: () => ipcRenderer.invoke("gpi:install-workflow-skills") as Promise<WorkflowSkillsInstallResult>,
   updateWorkflowSkills: () => ipcRenderer.invoke("gpi:update-workflow-skills") as Promise<WorkflowSkillsUpdateResult>,
