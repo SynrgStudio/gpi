@@ -1,4 +1,4 @@
-import packager from "@electron/packager";
+import { packager } from "@electron/packager";
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
