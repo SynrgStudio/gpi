@@ -35,7 +35,7 @@ export const initialWorkspace: WorkspaceState = {
   archivedSessions: {},
   sessionSelectionRanks: {},
   turnSnapshots: {},
-  settings: { revertSafeEditsEnabled: false, piInstallOnboardingSeen: false },
+  settings: { revertSafeEditsEnabled: false, piInstallOnboardingSeen: false, lastSeenAppVersion: undefined },
 };
 
 export function hydrateWorkspace(persisted: Partial<WorkspaceState> | undefined): WorkspaceState {
@@ -73,6 +73,10 @@ export function markRevertSafeTurn(workspace: WorkspaceState, _sessionId: string
 
 export function markPiInstallOnboardingSeen(workspace: WorkspaceState): WorkspaceState {
   return { ...workspace, settings: { ...workspace.settings, piInstallOnboardingSeen: true } };
+}
+
+export function markAppVersionSeen(workspace: WorkspaceState, appVersion: string): WorkspaceState {
+  return { ...workspace, settings: { ...workspace.settings, lastSeenAppVersion: appVersion } };
 }
 
 export function appendRevertResultEvent(workspace: WorkspaceState, sessionId: string, message: string, tone: "success" | "warning"): WorkspaceState {

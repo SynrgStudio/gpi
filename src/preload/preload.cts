@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld("gpi", {
   getUpdateStatus: () => ipcRenderer.invoke("gpi:get-update-status") as Promise<GpiUpdateStatus>,
   updatePi: () => ipcRenderer.invoke("gpi:update-pi") as Promise<GpiPiUpdateResult>,
   openExternal: (url: string) => ipcRenderer.invoke("gpi:open-external", url) as Promise<GpiOpenExternalResult>,
+  downloadGpiUpdate: (url: string) => ipcRenderer.invoke("gpi:download-gpi-update", url) as Promise<GpiAppUpdateDownloadResult>,
+  installGpiUpdate: (installerPath: string) => ipcRenderer.invoke("gpi:install-gpi-update", installerPath) as Promise<GpiAppUpdateInstallResult>,
   getWorkflowSkillText: (skillName: WorkflowSkillName) => ipcRenderer.invoke("gpi:get-workflow-skill-text", skillName) as Promise<{ name: WorkflowSkillName; text: string }>,
   installWorkflowSkills: () => ipcRenderer.invoke("gpi:install-workflow-skills") as Promise<WorkflowSkillsInstallResult>,
   updateWorkflowSkills: () => ipcRenderer.invoke("gpi:update-workflow-skills") as Promise<WorkflowSkillsUpdateResult>,

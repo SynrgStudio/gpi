@@ -3135,6 +3135,27 @@ body::after {
   letter-spacing: 0.08em;
 }
 
+.release-notes-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.release-notes-list span {
+  color: rgba(244, 244, 245, 0.82);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.release-notes-list span::before {
+  margin-right: 8px;
+  color: rgba(124, 134, 255, 0.9);
+  content: "•";
+}
+
 .pi-install-command-card code {
   overflow-x: auto;
   padding: 10px 11px;

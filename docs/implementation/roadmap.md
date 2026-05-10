@@ -250,7 +250,17 @@ Validation:
 - Fade out only after the renderer has a usable workspace state.
 - Surface fatal startup errors in the splash instead of a black window.
 
-### N10 — High-value agent IDE features to evaluate
+### N10 — Linux packaging and release support
+
+See `docs/implementation/linux-packaging.md` for the full Linux plan.
+
+- Add Linux portable packaging.
+- Add Debian package generation.
+- Add Linux artifacts to GitHub Releases.
+- Make the updater choose platform-specific assets.
+- Add Linux folder-open integration through `.desktop` metadata.
+
+### N11 — High-value agent IDE features to evaluate
 
 - Inline command palette actions for common Pi workflows: new session, import sessions, install skills, update Pi, update GPi.
 - Prompt attachment tray showing files mentioned with `@`, with remove buttons before send.

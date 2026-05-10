@@ -1,5 +1,5 @@
 import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -89,6 +89,8 @@ function registerIpc(window: BrowserWindow): void {
   ipcMain.handle("gpi:get-update-status", async () => getUpdateStatus());
   ipcMain.handle("gpi:update-pi", async () => updatePi());
   ipcMain.handle("gpi:open-external", async (_event, url: unknown) => openExternalUrl(requireString(url, "url")));
+  ipcMain.handle("gpi:download-gpi-update", async (_event, url: unknown) => downloadGpiUpdate(requireString(url, "url")));
+  ipcMain.handle("gpi:install-gpi-update", async (_event, installerPath: unknown) => installGpiUpdate(requireString(installerPath, "installerPath")));
   ipcMain.handle("gpi:get-workflow-skill-text", async (_event, skillName: unknown) => readBundledWorkflowSkill(requireWorkflowSkillName(skillName)));
   ipcMain.handle("gpi:install-workflow-skills", async () => installWorkflowSkills());
   ipcMain.handle("gpi:update-workflow-skills", async () => updateWorkflowSkills());
@@ -391,6 +393,37 @@ async function openExternalUrl(url: string): Promise<GpiOpenExternalResult> {
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Only http/https URLs can be opened externally");
   await shell.openExternal(parsed.toString());
   return { ok: true };
+}
+
+async function downloadGpiUpdate(url: string): Promise<GpiAppUpdateDownloadResult> {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "https:") throw new Error("Only HTTPS update downloads are allowed");
+  if (parsed.hostname !== "github.com" && parsed.hostname !== "objects.githubusercontent.com") throw new Error("Only GitHub release assets can be downloaded as GPi updates");
+  const fileName = decodeURIComponent(parsed.pathname.split("/").at(-1) ?? "GPi-Setup.exe");
+  if (!fileName.endsWith(".exe")) throw new Error("GPi update asset must be a Windows installer executable");
+  const response = await fetch(parsed.toString());
+  if (!response.ok) throw new Error(`Update download failed: ${response.status.toString()}`);
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const updatesDirectory = join(app.getPath("userData"), "updates");
+  await mkdir(updatesDirectory, { recursive: true });
+  const installerPath = join(updatesDirectory, fileName);
+  await writeFile(installerPath, bytes);
+  return { ok: true, installerPath };
+}
+
+async function installGpiUpdate(installerPath: string): Promise<GpiAppUpdateInstallResult> {
+  const updatesDirectory = resolve(app.getPath("userData"), "updates");
+  const resolvedInstallerPath = resolve(installerPath);
+  if (!resolvedInstallerPath.startsWith(updatesDirectory)) throw new Error("Installer path is outside the GPi updates directory");
+  await access(resolvedInstallerPath);
+  const child = spawn(resolvedInstallerPath, [], { detached: true, stdio: "ignore" });
+  child.unref();
+  windowSetTimeoutQuit();
+  return { ok: true };
+}
+
+function windowSetTimeoutQuit(): void {
+  setTimeout(() => app.quit(), 250);
 }
 
 async function fetchLatestGpiRelease(): Promise<{ version: string; releaseUrl: string; installerUrl: string | undefined }> {

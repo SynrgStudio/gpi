@@ -228,6 +228,7 @@ export type TurnSnapshotRevertResult =
 export interface WorkspaceSettings {
   revertSafeEditsEnabled: boolean;
   piInstallOnboardingSeen: boolean;
+  lastSeenAppVersion: string | undefined;
 }
 
 export interface GpiUpdateStatus {
@@ -246,6 +247,15 @@ export interface GpiUpdateStatus {
 }
 
 export interface GpiOpenExternalResult {
+  ok: true;
+}
+
+export interface GpiAppUpdateDownloadResult {
+  ok: true;
+  installerPath: string;
+}
+
+export interface GpiAppUpdateInstallResult {
   ok: true;
 }
 

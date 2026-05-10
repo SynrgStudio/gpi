@@ -2,7 +2,7 @@
 
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge";
-import type { ContinuityWorkflowStatus, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -23,6 +23,8 @@ interface GpiPreloadApi {
   getUpdateStatus(): Promise<GpiUpdateStatus>;
   updatePi(): Promise<GpiPiUpdateResult>;
   openExternal(url: string): Promise<GpiOpenExternalResult>;
+  downloadGpiUpdate(url: string): Promise<GpiAppUpdateDownloadResult>;
+  installGpiUpdate(installerPath: string): Promise<GpiAppUpdateInstallResult>;
   getWorkflowSkillText(skillName: WorkflowSkillName): Promise<{ name: WorkflowSkillName; text: string }>;
   installWorkflowSkills(): Promise<WorkflowSkillsInstallResult>;
   updateWorkflowSkills(): Promise<WorkflowSkillsUpdateResult>;

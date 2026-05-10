@@ -12,6 +12,7 @@ import {
   archiveSessionInWorkspace,
   hydrateWorkspace,
   importProjectSessions,
+  markAppVersionSeen,
   markPiInstallOnboardingSeen,
   markPromptAccepted,
   markRevertSafeTurn,
@@ -313,6 +314,10 @@ export function App() {
   const [updateStatusLoading, setUpdateStatusLoading] = useState(false);
   const [piUpdateRunning, setPiUpdateRunning] = useState(false);
   const [piUpdateMessage, setPiUpdateMessage] = useState<string | undefined>();
+  const [gpiUpdateInstallerPath, setGpiUpdateInstallerPath] = useState<string | undefined>();
+  const [gpiUpdateMessage, setGpiUpdateMessage] = useState<string | undefined>();
+  const [gpiUpdateDownloading, setGpiUpdateDownloading] = useState(false);
+  const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
   const [continuityStatus, setContinuityStatus] = useState<ContinuityWorkflowStatus | undefined>();
   const [modelOptionsByHandle, setModelOptionsByHandle] = useState<Record<string, GpiModelOptions>>({});
   const [compactionOptionsByHandle, setCompactionOptionsByHandle] = useState<Record<string, GpiCompactionOptions>>({});
@@ -368,6 +373,16 @@ export function App() {
     void refreshWorkflowSkillsStatus(true);
     void refreshUpdateStatus();
   }, [workspaceLoaded]);
+
+  useEffect(() => {
+    const appVersion = updateStatus?.appVersion;
+    if (!appVersion || appVersion === "unknown") return;
+    if (workspace.settings.lastSeenAppVersion === undefined) {
+      setWorkspace((current) => markAppVersionSeen(current, appVersion));
+      return;
+    }
+    if (workspace.settings.lastSeenAppVersion !== appVersion) setReleaseNotesOpen(true);
+  }, [updateStatus?.appVersion, workspace.settings.lastSeenAppVersion]);
 
   useEffect(() => {
     if (!window.gpi || !selectedProject) {
@@ -541,7 +556,11 @@ export function App() {
   async function refreshUpdateStatus(clearUpdateMessage = true): Promise<void> {
     if (!window.gpi) return;
     setUpdateStatusLoading(true);
-    if (clearUpdateMessage) setPiUpdateMessage(undefined);
+    if (clearUpdateMessage) {
+      setPiUpdateMessage(undefined);
+      setGpiUpdateMessage(undefined);
+      setGpiUpdateInstallerPath(undefined);
+    }
     try {
       setUpdateStatus(await window.gpi.getUpdateStatus());
     } catch (error) {
@@ -566,9 +585,29 @@ export function App() {
   }
 
   async function updateGpiFromSettings(): Promise<void> {
-    const url = updateStatus?.appInstallerUrl ?? updateStatus?.appReleaseUrl;
-    if (!window.gpi || !url) return;
-    await window.gpi.openExternal(url);
+    if (!window.gpi || !updateStatus) return;
+    if (gpiUpdateInstallerPath) {
+      setGpiUpdateMessage("Starting GPi installer...");
+      await window.gpi.installGpiUpdate(gpiUpdateInstallerPath);
+      return;
+    }
+    const url = updateStatus.appInstallerUrl;
+    if (!url) {
+      if (updateStatus.appReleaseUrl) await window.gpi.openExternal(updateStatus.appReleaseUrl);
+      return;
+    }
+    setGpiUpdateDownloading(true);
+    setGpiUpdateMessage("Downloading GPi update...");
+    try {
+      const result = await window.gpi.downloadGpiUpdate(url);
+      setGpiUpdateInstallerPath(result.installerPath);
+      setGpiUpdateMessage("Update downloaded. Click Install Update to close GPi and run the installer.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setGpiUpdateMessage(`GPi update download failed: ${message}`);
+    } finally {
+      setGpiUpdateDownloading(false);
+    }
   }
 
   async function updatePiFromSettings(): Promise<void> {
@@ -766,6 +805,15 @@ export function App() {
     return Boolean(workflowSkillsStatus && workflowSkillsStatus.skills.every((skill) => skill.status === "installed"));
   }
 
+  function hasContinuityWorkStarted(): boolean {
+    if (!continuityStatus) return false;
+    return continuityStatus.counts.done > 0 || continuityStatus.counts.partial > 0 || continuityStatus.counts.cancelled > 0 || continuityStatus.counts.inProgress > 0;
+  }
+
+  function shouldShowPlanRefinementButton(): boolean {
+    return Boolean(workflowSkillsReady() && continuityStatus?.phase === "executable" && hasContinuityWorkStarted());
+  }
+
   function workflowLabel(): string {
     if (!workflowSkillsReady()) return "Initialize";
     if (selectedMessages.length === 0 && selectedTimelineEvents.length === 0) return "Initialize";
@@ -774,6 +822,11 @@ export function App() {
     if (continuityStatus.phase === "initialized") return "Plan";
     if (continuityStatus.phase === "planned" || continuityStatus.phase === "executable") return "Start";
     return "End";
+  }
+
+  function sendPlanWorkflowPrompt(): void {
+    const context = selectedDraft.trim();
+    sendPrompt(`/plan-cont${context.length > 0 ? ` ${context}` : ""}`);
   }
 
   function runComposerWorkflowAction(): void {
@@ -1297,8 +1350,10 @@ export function App() {
           onThinkingChange={(value) => void changeThinkingLevel(value)}
           workflowLabel={workflowLabel()}
           focusKey={selectedSession?.id}
+          showPlanRefinement={shouldShowPlanRefinementButton()}
           revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
           shouldAutoFocus={!quickSwitcherOpen && !confirmDialog && !workflowOnboardingOpen && !settingsOpen}
+          onPlanRefinement={() => sendPlanWorkflowPrompt()}
           onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
           onWorkflowAction={runComposerWorkflowAction}
         />
@@ -1310,6 +1365,9 @@ export function App() {
       {settingsOpen ? (
         <SettingsDialog
           revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
+          gpiUpdateDownloading={gpiUpdateDownloading}
+          gpiUpdateInstallerReady={Boolean(gpiUpdateInstallerPath)}
+          gpiUpdateMessage={gpiUpdateMessage}
           piUpdateMessage={piUpdateMessage}
           piUpdateRunning={piUpdateRunning}
           updateStatus={updateStatus}
@@ -1330,6 +1388,16 @@ export function App() {
       ) : null}
       {workspaceLoaded && !workspace.settings.piInstallOnboardingSeen ? (
         <PiInstallOnboardingDialog onClose={() => setWorkspace((current) => markPiInstallOnboardingSeen(current))} />
+      ) : null}
+      {releaseNotesOpen && updateStatus ? (
+        <ReleaseNotesDialog
+          appVersion={updateStatus.appVersion}
+          previousVersion={workspace.settings.lastSeenAppVersion}
+          onClose={() => {
+            setWorkspace((current) => markAppVersionSeen(current, updateStatus.appVersion));
+            setReleaseNotesOpen(false);
+          }}
+        />
       ) : null}
       {workflowOnboardingOpen && workflowSkillsStatus ? (
         <WorkflowSkillsOnboarding
@@ -1436,6 +1504,33 @@ const PI_INSTALL_COMMANDS: Record<PiInstallTab, { label: string; command: string
   bun: { label: "BUN", command: "bun add -g @earendil-works/pi-coding-agent" },
 };
 
+function ReleaseNotesDialog(props: { appVersion: string; previousVersion: string | undefined; onClose: () => void }) {
+  return (
+    <div className="confirm-backdrop pi-install-backdrop" onMouseDown={props.onClose}>
+      <section className="pi-install-dialog release-notes-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <div className="pi-install-heading">
+          <span className="confirm-eyebrow">GPi updated</span>
+          <h2>Version {props.appVersion}</h2>
+          <p>{props.previousVersion ? `Updated from ${props.previousVersion}.` : "GPi has been updated."} Review the latest changes before continuing.</p>
+        </div>
+        <div className="release-notes-list">
+          {releaseNotesForVersion(props.appVersion).map((note) => <span key={note}>{note}</span>)}
+        </div>
+        <div className="confirm-actions">
+          <button className="confirm-primary" onClick={props.onClose} title="Continue to GPi" type="button">Continue</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function releaseNotesForVersion(appVersion: string): string[] {
+  if (appVersion === "0.0.4") return ["Fixed false workflow-skill conflicts caused by Windows newline conversion.", "Continuity skills now compare normalized text between installed and bundled copies."];
+  if (appVersion === "0.0.3") return ["Continuity now requires a planning pass before Start when init-cont created an initial queue.", "Added roadmap items for file mentions, file tree, context menu integration, splash screen, and Linux packaging."];
+  if (appVersion === "0.0.2") return ["Fixed packaged Windows runtime asset loading.", "Bundled continuity skills are now available from installed GPi builds."];
+  return ["GPi was updated. Check the GitHub release notes for the full changelog."];
+}
+
 function PiInstallOnboardingDialog(props: { onClose: () => void }) {
   const [activeTab, setActiveTab] = useState<PiInstallTab>("curl");
   const active = PI_INSTALL_COMMANDS[activeTab];
@@ -1490,6 +1585,9 @@ function PiInstallOnboardingDialog(props: { onClose: () => void }) {
 
 function SettingsDialog(props: {
   revertSafeEditsEnabled: boolean;
+  gpiUpdateDownloading: boolean;
+  gpiUpdateInstallerReady: boolean;
+  gpiUpdateMessage: string | undefined;
   piUpdateMessage: string | undefined;
   piUpdateRunning: boolean;
   updateStatus: GpiUpdateStatus | undefined;
@@ -1590,11 +1688,14 @@ function SettingsDialog(props: {
                   </span>
                 </div>
                 {props.updateStatus?.error && !props.updateStatus.installedPiVersion ? <div className="settings-inline-warning">{props.updateStatus.error}</div> : null}
+                {props.gpiUpdateMessage ? <div className="settings-inline-warning">{props.gpiUpdateMessage}</div> : null}
                 {props.piUpdateMessage ? <div className="settings-inline-warning">{props.piUpdateMessage}</div> : null}
                 <div className="settings-update-actions">
                   <button className="settings-secondary-button" onClick={props.onRefreshWorkflowSkills} title="Check GPi/Pi versions and update availability" type="button">{props.updateStatusLoading ? "Looking..." : "Look for Updates"}</button>
                   {props.updateStatus?.appUpdateAvailable && (props.updateStatus.appInstallerUrl || props.updateStatus.appReleaseUrl) ? (
-                    <button className="settings-primary-button" onClick={props.onUpdateGpi} title="Download the latest GPi release" type="button">Update GPi</button>
+                    <button className="settings-primary-button" disabled={props.gpiUpdateDownloading} onClick={props.onUpdateGpi} title={props.gpiUpdateInstallerReady ? "Close GPi and run the downloaded installer" : "Download the latest GPi installer"} type="button">
+                      {props.gpiUpdateDownloading ? "Downloading..." : props.gpiUpdateInstallerReady ? "Install Update" : "Update GPi"}
+                    </button>
                   ) : null}
                   {props.updateStatus?.piUpdateAvailable ? (
                     <button className="settings-primary-button" disabled={props.piUpdateRunning} onClick={props.onUpdatePi} title="Run pi update" type="button">{props.piUpdateRunning ? "Updating Pi..." : "Update Pi"}</button>
@@ -1631,7 +1732,7 @@ function SettingsDialog(props: {
                   <span>Onboarding</span>
                   <strong>Continuity skills</strong>
                 </div>
-                <p>These bundled skills power Initialize, Plan, Start, and End. GPi checks whether each skill is installed, missing, or differs from the bundled copy. Conflicts mean an installed skill differs from the GPi bundle; use View text to inspect, then Update bundled skills to replace them.</p>
+                <p>These bundled skills power Initialize, Plan, Start, and End. Plan can be used before execution to create the queue, and after some work has already happened to refine or add tasks before continuing with Start. GPi checks whether each skill is installed, missing, or differs from the bundled copy.</p>
                 <div className="workflow-skill-list settings-skill-list">
                   {props.workflowStatus ? props.workflowStatus.skills.map((skill) => (
                     <div className={`workflow-skill-row ${skill.status}`} key={skill.name}>
@@ -1819,9 +1920,10 @@ function WorkflowSkillsOnboarding(props: {
               <WorkflowSimulationStep title="2. Initialize" body="When the goal is ready, click Initialize. It is a discrete action that initializes the continuity skill directly." command="Initialize" />
               <WorkflowSimulationStep title="3. Refine before Plan" body="Discuss corrections, constraints, and edge cases. Nothing is sticky; normal prompts remain normal." command="Send refinements normally" />
               <WorkflowSimulationStep title="4. Plan" body="Click Plan to ask Pi to turn the initialized goal into an executable queue." command="Plan → /plan-cont" />
-              <WorkflowSimulationStep title="5. Review the plan" body="Read the queue, ask for changes if needed, then click Plan again only when you want one more planning pass." command="Optional Plan refinement" />
-              <WorkflowSimulationStep title="6. Start" body="Click Start when the queue looks right. Pi executes the active queue with your start-cont skill." command="Start → /start-cont" />
-              <WorkflowSimulationStep title="7. End" body="When the session is complete, click End. GPi closes the continuity loop and archives the session state." command="End" />
+              <WorkflowSimulationStep title="5. Review the plan" body="Read the queue, ask for changes if needed, then click Plan again when you want another planning pass." command="Optional Plan refinement" />
+              <WorkflowSimulationStep title="6. Start" body="Click Start when the queue looks right. If no work has started, Start is the only execution action you need." command="Start → /start-cont" />
+              <WorkflowSimulationStep title="7. Refine after work starts" body="After at least one task has been worked, GPi shows both Plan and Start: Plan adds/refines tasks, Start continues execution." command="Plan or Start" />
+              <WorkflowSimulationStep title="8. End" body="When the session is complete, click End. GPi closes the continuity loop and archives the session state." command="End" />
             </div>
             <footer>
               <span>Last step: review the bundled skills and choose whether to install them.</span>
@@ -2295,6 +2397,7 @@ function MessageTimeline(props: {
   const shellRef = useRef<HTMLElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const pinnedToBottomRef = useRef(true);
+  const autoScrollInterruptedRef = useRef(false);
   const scrollPillRef = useRef<HTMLDivElement>(null);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const lastMessage = props.messages.at(-1);
@@ -2303,14 +2406,15 @@ function MessageTimeline(props: {
 
   useEffect(() => {
     pinnedToBottomRef.current = true;
+    autoScrollInterruptedRef.current = false;
     setShowScrollToBottom(false);
-    scrollTimelineToBottom(shellRef.current);
+    scrollTimelineToBottom(shellRef.current, "auto", () => autoScrollInterruptedRef.current);
   }, [props.selectedSessionId]);
 
   useEffect(() => {
-    if (!pinnedToBottomRef.current) return;
-    scrollTimelineToBottom(shellRef.current);
-    const frame = window.requestAnimationFrame(() => scrollTimelineToBottom(shellRef.current));
+    if (!pinnedToBottomRef.current || autoScrollInterruptedRef.current) return;
+    scrollTimelineToBottom(shellRef.current, "auto", () => autoScrollInterruptedRef.current);
+    const frame = window.requestAnimationFrame(() => scrollTimelineToBottom(shellRef.current, "auto", () => autoScrollInterruptedRef.current));
     return () => window.cancelAnimationFrame(frame);
   }, [lastEvent?.id, lastMessage?.text, props.details.length, props.messages.length, props.timelineEvents.length, timelineScrollSignal]);
 
@@ -2319,18 +2423,27 @@ function MessageTimeline(props: {
     const shell = shellRef.current;
     if (!shell) return;
     const nearBottom = isNearScrollBottom(shell);
+    if (nearBottom) autoScrollInterruptedRef.current = false;
     pinnedToBottomRef.current = nearBottom;
     setShowScrollToBottom(!nearBottom && props.messages.length > 0);
   }
 
+  function handleTimelineWheel(event: React.WheelEvent<HTMLElement>): void {
+    if (event.deltaY >= 0) return;
+    autoScrollInterruptedRef.current = true;
+    pinnedToBottomRef.current = false;
+    setShowScrollToBottom(props.messages.length > 0 || props.timelineEvents.length > 0);
+  }
+
   function scrollToBottom(): void {
     pinnedToBottomRef.current = true;
+    autoScrollInterruptedRef.current = false;
     setShowScrollToBottom(false);
-    scrollTimelineToBottom(shellRef.current, "smooth");
+    scrollTimelineToBottom(shellRef.current, "smooth", () => autoScrollInterruptedRef.current);
   }
 
   return (
-    <section className="timeline-shell" onScroll={handleTimelineScroll} ref={shellRef}>
+    <section className="timeline-shell" onScroll={handleTimelineScroll} onWheel={handleTimelineWheel} ref={shellRef}>
       <div className="timeline-content">
         {props.bridgeError ? <div className="thread-error-banner">{props.bridgeError}</div> : null}
         {props.messages.length === 0 && props.timelineEvents.length === 0 ? (
@@ -2925,8 +3038,10 @@ function Composer(props: {
   onThinkingChange: (value: string) => void;
   workflowLabel: string;
   focusKey: string | undefined;
+  showPlanRefinement: boolean;
   revertSafeEditsEnabled: boolean;
   shouldAutoFocus: boolean;
+  onPlanRefinement: () => void;
   onRevertSafeEditsChange: (enabled: boolean) => void;
   onWorkflowAction: () => void;
 }) {
@@ -2972,7 +3087,8 @@ function Composer(props: {
             <span>{props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi SDK connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session"}</span>
           </div>
           <div className="composer-model-controls">
-            <button className="mode-button" onClick={props.onWorkflowAction} title={workflowButtonTitle(props.workflowLabel)} type="button">{props.workflowLabel}</button>
+            {props.showPlanRefinement ? <button className="mode-button" onClick={props.onPlanRefinement} title="Refine the active continuity plan or add more tasks before continuing execution" type="button">Plan</button> : null}
+            <button className="mode-button" onClick={props.onWorkflowAction} title={workflowButtonTitle(props.workflowLabel, props.showPlanRefinement)} type="button">{props.workflowLabel}</button>
             <button
               className={props.revertSafeEditsEnabled ? "revert-safe-toggle active" : "revert-safe-toggle"}
               onClick={() => props.onRevertSafeEditsChange(!props.revertSafeEditsEnabled)}
@@ -3013,10 +3129,10 @@ function Composer(props: {
   );
 }
 
-function workflowButtonTitle(label: string): string {
+function workflowButtonTitle(label: string, hasSeparatePlanButton: boolean): string {
   if (label === "Initialize") return "Initialize continuity for this session";
-  if (label === "Plan") return "Ask Pi to plan the active continuity queue";
-  if (label === "Start") return "Start executing the planned continuity queue";
+  if (label === "Plan") return "Ask Pi to create or refine the active continuity queue";
+  if (label === "Start") return hasSeparatePlanButton ? "Continue executing the active queue; use Plan to add or refine tasks first" : "Start executing the planned continuity queue";
   if (label === "End") return "End and archive continuity state";
   return label;
 }
@@ -3550,10 +3666,11 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return target.matches("input, textarea, select, [contenteditable='true'], [contenteditable='']");
 }
 
-function scrollTimelineToBottom(element: HTMLElement | null, behavior: ScrollBehavior = "auto"): void {
+function scrollTimelineToBottom(element: HTMLElement | null, behavior: ScrollBehavior = "auto", shouldCancel?: () => boolean): void {
   if (!element) return;
 
   const scroll = () => {
+    if (shouldCancel?.()) return;
     element.scrollTo({ top: element.scrollHeight, behavior });
   };
 
