@@ -771,8 +771,8 @@ export function App() {
     if (selectedMessages.length === 0 && selectedTimelineEvents.length === 0) return "Initialize";
     if (!continuityStatus) return "Initialize";
     if (continuityStatus.phase === "missing") return "Initialize";
-    if (continuityStatus.phase === "initialized" || continuityStatus.phase === "planned") return "Plan";
-    if (continuityStatus.phase === "executable") return "Start";
+    if (continuityStatus.phase === "initialized") return "Plan";
+    if (continuityStatus.phase === "planned" || continuityStatus.phase === "executable") return "Start";
     return "End";
   }
 

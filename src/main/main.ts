@@ -274,10 +274,14 @@ async function getContinuityStatus(projectPath: string): Promise<ContinuityWorkf
   const continuitySession = [...sessions][0];
   const statuses = new Set(frontMatters.map((frontMatter) => frontMatter.status));
   if (!statuses.has("active")) return { ...emptyContinuityStatus("blocked", "Continuity session is not active", projectPath), continuitySession };
-  const activeQueue = files.find((file) => file.fileName === "ACTIVE_QUEUE.md")?.text ?? "";
+  const activeQueueFile = files.find((file) => file.fileName === "ACTIVE_QUEUE.md");
+  const activeQueue = activeQueueFile?.text ?? "";
+  const activeQueueFrontMatter = parseFrontMatter(activeQueue);
+  const plannedAt = activeQueueFrontMatter.planned_at;
   const counts = countQueueStatuses(activeQueue);
   const totalTasks = Object.values(counts).reduce((sum, count) => sum + count, 0);
   if (totalTasks === 0) return { ...emptyContinuityStatus("initialized", "Continuity initialized; plan queue next", projectPath), continuitySession, counts };
+  if (!plannedAt) return { ...emptyContinuityStatus("initialized", "Initial queue exists; run Plan to refine it before Start", projectPath), continuitySession, counts };
   if (counts.pending > 0 || counts.partial > 0 || counts.inProgress > 0) return { phase: "executable", summary: "Queue has executable work", projectPath, continuitySession, counts };
   if (counts.blocked > 0) return { phase: "blocked", summary: "Queue has blocked work", projectPath, continuitySession, counts };
   return { phase: "complete", summary: "Queue appears complete", projectPath, continuitySession, counts };

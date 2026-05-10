@@ -227,6 +227,42 @@ Validation:
 - Create a single dev launcher script that starts Vite, compiles Electron, and launches Electron safely.
 - Decide production packaging path.
 
+### N7 — File-aware composer and project navigation
+
+- Add `@` mentions in the composer for project files.
+- Resolve mentions to project-relative paths and include them in the prompt context sent to Pi.
+- Add a read-only project file tree for the selected project.
+- Let users click a file in the tree to insert an `@path/to/file` mention in the composer.
+- Keep file tree read-only; editing remains delegated to Pi tools and revert-safe snapshots.
+
+### N8 — Windows shell integration
+
+- Add an Inno Setup option to register a folder context-menu action: `Open in GPi`.
+- Launch GPi with the selected folder path as an argument.
+- If the folder already exists as a GPi project, select it.
+- If it does not exist, create a new project for that folder and select it.
+- Validate uninstall removes registry entries cleanly.
+
+### N9 — Startup polish
+
+- Add a glass splash overlay with centered GPi logo while workspace, preload API, update status and Pi prewarm initialize.
+- Keep the splash inside the app window, above all content.
+- Fade out only after the renderer has a usable workspace state.
+- Surface fatal startup errors in the splash instead of a black window.
+
+### N10 — High-value agent IDE features to evaluate
+
+- Inline command palette actions for common Pi workflows: new session, import sessions, install skills, update Pi, update GPi.
+- Prompt attachment tray showing files mentioned with `@`, with remove buttons before send.
+- Recent files and fuzzy file search inside the `@` menu.
+- Session transcript search across current project.
+- Diff review mode grouped by turn, with accept/revert actions per file where safe.
+- Token/context budget indicator before send, including mentioned file context estimate.
+- Per-project instructions file discovery (`AGENTS.md`, `README.md`, `.pi/settings.json`) with visibility in the UI.
+- Background task queue view for long-running sessions and continuations.
+- Branch/git status summary for the selected project.
+- Error recovery cards when Pi auth, provider keys, package updates or project paths fail.
+
 ## Known manual decisions
 
 - exact app shell: Electron, Tauri+Node sidecar, web local, or other
