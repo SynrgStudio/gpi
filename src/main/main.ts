@@ -291,6 +291,10 @@ function emptyContinuityStatus(phase: ContinuityWorkflowStatus["phase"], summary
   return { phase, summary, projectPath, continuitySession: undefined, counts: { blocked: 0, cancelled: 0, done: 0, inProgress: 0, partial: 0, pending: 0 } };
 }
 
+function normalizeTextNewlines(text: string): string {
+  return text.replace(/\r\n/g, "\n");
+}
+
 function parseFrontMatter(text: string): Record<string, string | undefined> {
   if (!text.startsWith("---")) return {};
   const end = text.indexOf("\n---", 3);
@@ -334,14 +338,14 @@ function bundledWorkflowSkillPath(skillName: WorkflowSkillName): string {
 }
 
 async function readBundledWorkflowSkill(skillName: WorkflowSkillName): Promise<{ name: WorkflowSkillName; text: string }> {
-  return { name: skillName, text: await readFile(bundledWorkflowSkillPath(skillName), "utf8") };
+  return { name: skillName, text: normalizeTextNewlines(await readFile(bundledWorkflowSkillPath(skillName), "utf8")) };
 }
 
 async function getWorkflowSkillStatus(skillName: WorkflowSkillName): Promise<WorkflowSkillStatus> {
   const installedPath = workflowSkillInstalledPath(skillName);
-  const bundled = await readFile(bundledWorkflowSkillPath(skillName), "utf8");
+  const bundled = normalizeTextNewlines(await readFile(bundledWorkflowSkillPath(skillName), "utf8"));
   try {
-    const installed = await readFile(installedPath, "utf8");
+    const installed = normalizeTextNewlines(await readFile(installedPath, "utf8"));
     return { name: skillName, installedPath, status: installed === bundled ? "installed" : "conflict" };
   } catch (error) {
     if (isNodeErrorCode(error, "ENOENT")) return { name: skillName, installedPath, status: "missing" };
