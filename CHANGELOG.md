@@ -1,0 +1,102 @@
+# Changelog
+
+All notable GPi changes are documented here. Releases must move relevant entries from `[Unreleased]` into a versioned section before tagging.
+
+## [Unreleased]
+
+### Added
+
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
+## [0.0.6] - 2026-05-11
+
+### Added
+
+- Added release changelog workflow so GPi update notes stay aligned with GitHub Releases.
+- Added release-backed post-update notes loaded from GitHub release metadata or local downloaded-update metadata.
+
+### Changed
+
+- Release automation now requires a versioned changelog entry before publishing.
+- Post-update modal now renders release notes from release metadata instead of hardcoded app-version notes.
+
+### Fixed
+
+- Fixed future release notes being easy to forget by making release validation fail without matching changelog notes.
+
+### Packaging
+
+- Added scripts for preparing and validating release notes.
+- Release workflow now publishes the changelog section as the GitHub Release body.
+
+### Known issues
+
+- Linux packaging is planned but not implemented yet.
+
+## [0.0.5] - 2026-05-10
+
+### Added
+
+- Added in-app GPi update download and install flow.
+- Added post-update notes modal shown once per app version.
+- Added dual Plan/Start workflow behavior after continuity work has begun.
+- Added interruptible timeline autoscroll with Jump to latest recovery.
+- Added Linux packaging plan documentation.
+
+### Changed
+
+- Improved continuity onboarding copy for Plan refinement after execution starts.
+
+### Fixed
+
+- Fixed autoscroll forcing the user back to the bottom after manual upward scrolling.
+
+### Packaging
+
+- Released `GPi-Setup-0.0.5.exe`.
+
+### Known issues
+
+- Post-update notes are still hardcoded in app code until release-backed notes are wired in.
+
+## [0.0.4] - 2026-05-10
+
+### Fixed
+
+- Fixed false workflow-skill conflicts caused by Windows newline conversion.
+
+## [0.0.3] - 2026-05-10
+
+### Fixed
+
+- Fixed continuity state detection so initialized queues require Plan before Start when no `planned_at` exists.
+
+## [0.0.2] - 2026-05-09
+
+### Fixed
+
+- Fixed packaged Windows runtime asset loading.
+- Fixed bundled continuity skills path in installed builds.
+
+## [0.0.1] - 2026-05-09
+
+### Added
+
+- Initial GPi Windows release.
+- Added release packaging and Windows installer workflow.

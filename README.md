@@ -86,9 +86,17 @@ git tag v0.0.1
 git push origin v0.0.1
 ```
 
-The release workflow runs checks, unit tests, packages GPi, builds the Inno installer, and attaches it to a GitHub Release.
+The release workflow runs checks, unit tests, validates `CHANGELOG.md`, packages GPi, builds the Inno installer, and attaches it to a GitHub Release.
 
-GPi Settings → Updates checks `https://github.com/SynrgStudio/gpi/releases` for newer app versions. When an installer asset is available, the `Update GPi` button opens the release installer download in the system browser.
+Before tagging, add release notes under `## [Unreleased]`, then run:
+
+```bash
+npm run release:prepare -- 0.0.X
+```
+
+This bumps package/installer versions and moves `[Unreleased]` notes into `## [0.0.X] - YYYY-MM-DD`. The release workflow fails if the tag version has no changelog section.
+
+GPi Settings → Updates checks `https://github.com/SynrgStudio/gpi/releases` for newer app versions. When an installer asset is available, the `Update GPi` button downloads the installer in-app and changes to `Install Update`.
 
 ## Project structure
 

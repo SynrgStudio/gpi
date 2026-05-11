@@ -3156,6 +3156,31 @@ body::after {
   content: "•";
 }
 
+.release-notes-markdown {
+  max-height: 340px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  color: rgba(244, 244, 245, 0.86);
+  background: rgba(255, 255, 255, 0.025);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.release-notes-link {
+  color: #bfdbfe;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.release-notes-link:hover {
+  text-decoration: underline;
+}
+
 .pi-install-command-card code {
   overflow-x: auto;
   padding: 10px 11px;

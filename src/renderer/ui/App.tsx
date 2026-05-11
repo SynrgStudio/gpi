@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
-import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
+import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
   addOptimisticRealSession,
   addProjectToWorkspace,
@@ -318,6 +318,7 @@ export function App() {
   const [gpiUpdateMessage, setGpiUpdateMessage] = useState<string | undefined>();
   const [gpiUpdateDownloading, setGpiUpdateDownloading] = useState(false);
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
+  const [releaseNotes, setReleaseNotes] = useState<GpiReleaseNotes | undefined>();
   const [continuityStatus, setContinuityStatus] = useState<ContinuityWorkflowStatus | undefined>();
   const [modelOptionsByHandle, setModelOptionsByHandle] = useState<Record<string, GpiModelOptions>>({});
   const [compactionOptionsByHandle, setCompactionOptionsByHandle] = useState<Record<string, GpiCompactionOptions>>({});
@@ -381,7 +382,12 @@ export function App() {
       setWorkspace((current) => markAppVersionSeen(current, appVersion));
       return;
     }
-    if (workspace.settings.lastSeenAppVersion !== appVersion) setReleaseNotesOpen(true);
+    if (workspace.settings.lastSeenAppVersion !== appVersion) {
+      setReleaseNotesOpen(true);
+      if (window.gpi) {
+        void window.gpi.getGpiReleaseNotes(appVersion).then(setReleaseNotes).catch(() => setReleaseNotes(undefined));
+      }
+    }
   }, [updateStatus?.appVersion, workspace.settings.lastSeenAppVersion]);
 
   useEffect(() => {
@@ -570,6 +576,8 @@ export function App() {
         latestAppVersion: undefined,
         appUpdateAvailable: undefined,
         appReleaseUrl: undefined,
+        appReleaseName: undefined,
+        appReleaseBody: undefined,
         appInstallerUrl: undefined,
         piPackageName: "@earendil-works/pi-coding-agent",
         installedPiVersion: undefined,
@@ -1393,9 +1401,11 @@ export function App() {
         <ReleaseNotesDialog
           appVersion={updateStatus.appVersion}
           previousVersion={workspace.settings.lastSeenAppVersion}
+          releaseNotes={releaseNotes ?? releaseNotesFromUpdateStatus(updateStatus)}
           onClose={() => {
             setWorkspace((current) => markAppVersionSeen(current, updateStatus.appVersion));
             setReleaseNotesOpen(false);
+            setReleaseNotes(undefined);
           }}
         />
       ) : null}
@@ -1504,18 +1514,25 @@ const PI_INSTALL_COMMANDS: Record<PiInstallTab, { label: string; command: string
   bun: { label: "BUN", command: "bun add -g @earendil-works/pi-coding-agent" },
 };
 
-function ReleaseNotesDialog(props: { appVersion: string; previousVersion: string | undefined; onClose: () => void }) {
+function ReleaseNotesDialog(props: { appVersion: string; previousVersion: string | undefined; releaseNotes: GpiReleaseNotes | undefined; onClose: () => void }) {
+  const body = props.releaseNotes?.body?.trim();
   return (
     <div className="confirm-backdrop pi-install-backdrop" onMouseDown={props.onClose}>
       <section className="pi-install-dialog release-notes-dialog" onMouseDown={(event) => event.stopPropagation()}>
         <div className="pi-install-heading">
           <span className="confirm-eyebrow">GPi updated</span>
-          <h2>Version {props.appVersion}</h2>
+          <h2>{props.releaseNotes?.name ?? `Version ${props.appVersion}`}</h2>
           <p>{props.previousVersion ? `Updated from ${props.previousVersion}.` : "GPi has been updated."} Review the latest changes before continuing.</p>
         </div>
-        <div className="release-notes-list">
-          {releaseNotesForVersion(props.appVersion).map((note) => <span key={note}>{note}</span>)}
-        </div>
+        {body ? (
+          <pre className="release-notes-markdown">{body}</pre>
+        ) : (
+          <div className="release-notes-list">
+            <span>GPi was updated. Release notes are unavailable locally.</span>
+            <span>Check the GitHub release page for the full changelog.</span>
+          </div>
+        )}
+        {props.releaseNotes?.releaseUrl ? <a className="release-notes-link" href={props.releaseNotes.releaseUrl} rel="noreferrer" target="_blank">Open GitHub release</a> : null}
         <div className="confirm-actions">
           <button className="confirm-primary" onClick={props.onClose} title="Continue to GPi" type="button">Continue</button>
         </div>
@@ -1524,11 +1541,16 @@ function ReleaseNotesDialog(props: { appVersion: string; previousVersion: string
   );
 }
 
-function releaseNotesForVersion(appVersion: string): string[] {
-  if (appVersion === "0.0.4") return ["Fixed false workflow-skill conflicts caused by Windows newline conversion.", "Continuity skills now compare normalized text between installed and bundled copies."];
-  if (appVersion === "0.0.3") return ["Continuity now requires a planning pass before Start when init-cont created an initial queue.", "Added roadmap items for file mentions, file tree, context menu integration, splash screen, and Linux packaging."];
-  if (appVersion === "0.0.2") return ["Fixed packaged Windows runtime asset loading.", "Bundled continuity skills are now available from installed GPi builds."];
-  return ["GPi was updated. Check the GitHub release notes for the full changelog."];
+function releaseNotesFromUpdateStatus(status: GpiUpdateStatus): GpiReleaseNotes | undefined {
+  if (status.appVersion !== status.latestAppVersion) return undefined;
+  if (!status.appReleaseBody && !status.appReleaseUrl && !status.appReleaseName) return undefined;
+  return {
+    version: status.appVersion,
+    name: status.appReleaseName,
+    body: status.appReleaseBody,
+    releaseUrl: status.appReleaseUrl,
+    source: "github",
+  };
 }
 
 function PiInstallOnboardingDialog(props: { onClose: () => void }) {

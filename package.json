@@ -1,6 +1,6 @@
 {
   "name": "gpi",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "GPi: a glass cockpit GUI for Pi with first-class multi-project and multi-session workflows.",
   "type": "module",
   "main": "dist/main/main.js",
@@ -12,7 +12,9 @@
     "test:unit": "node -e \"fs.rmSync('dist-test',{recursive:true,force:true})\" && tsc -p tsconfig.test.json && node --test \"dist-test/test/**/*.test.js\"",
     "build": "tsc --noEmit && tsc -p tsconfig.electron.json && vite build",
     "package:win": "npm run build && node scripts/package-win.mjs",
-    "installer:win": "npm run package:win && node scripts/build-installer-win.mjs"
+    "installer:win": "npm run package:win && node scripts/build-installer-win.mjs",
+    "release:notes": "node scripts/validate-release-notes.mjs",
+    "release:prepare": "node scripts/prepare-release.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",

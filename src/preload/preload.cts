@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld("gpi", {
   getContinuityStatus: (projectId: string) => ipcRenderer.invoke("gpi:get-continuity-status", projectId) as Promise<ContinuityWorkflowStatus>,
   getWorkflowSkillsStatus: () => ipcRenderer.invoke("gpi:get-workflow-skills-status") as Promise<WorkflowSkillsStatus>,
   getUpdateStatus: () => ipcRenderer.invoke("gpi:get-update-status") as Promise<GpiUpdateStatus>,
+  getGpiReleaseNotes: (version: string) => ipcRenderer.invoke("gpi:get-gpi-release-notes", version) as Promise<GpiReleaseNotes>,
   updatePi: () => ipcRenderer.invoke("gpi:update-pi") as Promise<GpiPiUpdateResult>,
   openExternal: (url: string) => ipcRenderer.invoke("gpi:open-external", url) as Promise<GpiOpenExternalResult>,
   downloadGpiUpdate: (url: string) => ipcRenderer.invoke("gpi:download-gpi-update", url) as Promise<GpiAppUpdateDownloadResult>,

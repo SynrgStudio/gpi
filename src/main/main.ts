@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -24,6 +24,7 @@ const PRIMARY_PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const LEGACY_PI_PACKAGE_NAME = "@mariozechner/pi-coding-agent";
 const PI_PACKAGE_NAMES: readonly string[] = [PRIMARY_PI_PACKAGE_NAME, LEGACY_PI_PACKAGE_NAME];
 const GPI_RELEASES_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/latest";
+const GPI_RELEASE_BY_TAG_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/tags/";
 
 void bridge.prewarm().then((snapshot) => {
   if (snapshot.status === "ready") {
@@ -87,6 +88,7 @@ function registerIpc(window: BrowserWindow): void {
   ipcMain.handle("gpi:get-continuity-status", async (_event, projectId: unknown) => getContinuityStatus(await resolveProjectPath(requireString(projectId, "projectId"))));
   ipcMain.handle("gpi:get-workflow-skills-status", async () => getWorkflowSkillsStatus());
   ipcMain.handle("gpi:get-update-status", async () => getUpdateStatus());
+  ipcMain.handle("gpi:get-gpi-release-notes", async (_event, version: unknown) => getGpiReleaseNotes(requireString(version, "version")));
   ipcMain.handle("gpi:update-pi", async () => updatePi());
   ipcMain.handle("gpi:open-external", async (_event, url: unknown) => openExternalUrl(requireString(url, "url")));
   ipcMain.handle("gpi:download-gpi-update", async (_event, url: unknown) => downloadGpiUpdate(requireString(url, "url")));
@@ -377,6 +379,8 @@ async function getUpdateStatus(): Promise<GpiUpdateStatus> {
     latestAppVersion,
     appUpdateAvailable: appVersion && latestAppVersion ? compareSemver(appVersion, latestAppVersion) < 0 : undefined,
     appReleaseUrl: appRelease?.releaseUrl,
+    appReleaseName: appRelease?.name,
+    appReleaseBody: appRelease?.body,
     appInstallerUrl: appRelease?.installerUrl,
     piPackageName: packageInfo.packageName,
     installedPiVersion,
@@ -408,7 +412,11 @@ async function downloadGpiUpdate(url: string): Promise<GpiAppUpdateDownloadResul
   await mkdir(updatesDirectory, { recursive: true });
   const installerPath = join(updatesDirectory, fileName);
   await writeFile(installerPath, bytes);
-  return { ok: true, installerPath };
+  const metadataPath = await writeDownloadedUpdateMetadata(updatesDirectory, url).catch((error: unknown) => {
+    console.warn(`[gpi] update metadata unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  });
+  return { ok: true, installerPath, metadataPath };
 }
 
 async function installGpiUpdate(installerPath: string): Promise<GpiAppUpdateInstallResult> {
@@ -426,10 +434,21 @@ function windowSetTimeoutQuit(): void {
   setTimeout(() => app.quit(), 250);
 }
 
-async function fetchLatestGpiRelease(): Promise<{ version: string; releaseUrl: string; installerUrl: string | undefined }> {
+async function fetchLatestGpiRelease(): Promise<{ version: string; name: string | undefined; body: string | undefined; releaseUrl: string; installerUrl: string | undefined }> {
   const response = await fetch(GPI_RELEASES_API_URL, { headers: { accept: "application/vnd.github+json" } });
   if (!response.ok) throw new Error(`GitHub releases returned ${response.status.toString()}`);
-  const release = await response.json() as { html_url?: unknown; tag_name?: unknown; assets?: unknown };
+  return parseGpiReleasePayload(await response.json());
+}
+
+async function fetchGpiReleaseByTag(version: string): Promise<GpiReleaseNotes> {
+  const response = await fetch(`${GPI_RELEASE_BY_TAG_API_URL}${encodeURIComponent(`v${version}`)}`, { headers: { accept: "application/vnd.github+json" } });
+  if (!response.ok) throw new Error(`GitHub release ${version} returned ${response.status.toString()}`);
+  const release = parseGpiReleasePayload(await response.json());
+  return { version: release.version, name: release.name, body: release.body, releaseUrl: release.releaseUrl, source: "github" };
+}
+
+function parseGpiReleasePayload(payload: unknown): { version: string; name: string | undefined; body: string | undefined; releaseUrl: string; installerUrl: string | undefined } {
+  const release = payload as { body?: unknown; html_url?: unknown; name?: unknown; tag_name?: unknown; assets?: unknown };
   const version = typeof release.tag_name === "string" ? release.tag_name.replace(/^v/, "") : undefined;
   const releaseUrl = typeof release.html_url === "string" ? release.html_url : undefined;
   if (!version || !releaseUrl) throw new Error("GitHub release payload is missing version or URL");
@@ -440,9 +459,56 @@ async function fetchLatestGpiRelease(): Promise<{ version: string; releaseUrl: s
   });
   return {
     version,
+    name: typeof release.name === "string" ? release.name : undefined,
+    body: typeof release.body === "string" ? release.body : undefined,
     releaseUrl,
     installerUrl: typeof installer?.browser_download_url === "string" ? installer.browser_download_url : undefined,
   };
+}
+
+async function writeDownloadedUpdateMetadata(updatesDirectory: string, installerUrl: string): Promise<string | undefined> {
+  const release = await fetchLatestGpiRelease();
+  if (release.installerUrl !== installerUrl) return undefined;
+  const metadata: GpiReleaseNotes & { downloadedAt: number; installerUrl: string | undefined } = {
+    version: release.version,
+    name: release.name,
+    body: release.body,
+    releaseUrl: release.releaseUrl,
+    source: "github",
+    downloadedAt: Date.now(),
+    installerUrl: release.installerUrl,
+  };
+  const metadataPath = updateMetadataPath(updatesDirectory, release.version);
+  await writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+  return metadataPath;
+}
+
+async function getGpiReleaseNotes(version: string): Promise<GpiReleaseNotes> {
+  const updatesDirectory = join(app.getPath("userData"), "updates");
+  const local = await readLocalGpiReleaseNotes(updateMetadataPath(updatesDirectory, version));
+  if (local) return local;
+  return fetchGpiReleaseByTag(version);
+}
+
+function updateMetadataPath(updatesDirectory: string, version: string): string {
+  return join(updatesDirectory, `gpi-release-${version}.json`);
+}
+
+async function readLocalGpiReleaseNotes(metadataPath: string): Promise<GpiReleaseNotes | undefined> {
+  try {
+    const parsed = JSON.parse(await readFile(metadataPath, "utf8")) as Partial<GpiReleaseNotes>;
+    if (typeof parsed.version !== "string") return undefined;
+    return {
+      version: parsed.version,
+      name: typeof parsed.name === "string" ? parsed.name : undefined,
+      body: typeof parsed.body === "string" ? parsed.body : undefined,
+      releaseUrl: typeof parsed.releaseUrl === "string" ? parsed.releaseUrl : undefined,
+      source: "local-update-metadata",
+    };
+  } catch (error) {
+    if (isNodeErrorCode(error, "ENOENT")) return undefined;
+    throw error;
+  }
 }
 
 async function readInstalledPiCliVersion(): Promise<string | undefined> {

@@ -231,11 +231,21 @@ export interface WorkspaceSettings {
   lastSeenAppVersion: string | undefined;
 }
 
+export interface GpiReleaseNotes {
+  version: string;
+  name: string | undefined;
+  body: string | undefined;
+  releaseUrl: string | undefined;
+  source: "github" | "local-update-metadata";
+}
+
 export interface GpiUpdateStatus {
   appVersion: string;
   latestAppVersion: string | undefined;
   appUpdateAvailable: boolean | undefined;
   appReleaseUrl: string | undefined;
+  appReleaseName: string | undefined;
+  appReleaseBody: string | undefined;
   appInstallerUrl: string | undefined;
   piPackageName: string;
   installedPiVersion: string | undefined;
@@ -253,6 +263,7 @@ export interface GpiOpenExternalResult {
 export interface GpiAppUpdateDownloadResult {
   ok: true;
   installerPath: string;
+  metadataPath: string | undefined;
 }
 
 export interface GpiAppUpdateInstallResult {
