@@ -108,6 +108,7 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
     const result = await this.session.compact(customInstructions);
     const options = this.getCompactionOptions();
     this.emit({ type: "compaction_changed", sessionId: this.id, options, summary: `compacted ${result.tokensBefore.toString()} tokens` });
+    this.emitSessionStats();
     return options;
   }
 
@@ -215,6 +216,7 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
           options: this.getCompactionOptions(),
           summary: event.aborted ? "compaction aborted" : event.errorMessage ? `compaction failed: ${event.errorMessage}` : `compaction finished: ${event.reason}`,
         });
+        this.emitSessionStats();
         break;
       default:
         break;

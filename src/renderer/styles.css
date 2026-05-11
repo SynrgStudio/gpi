@@ -41,7 +41,7 @@
 
 .gpi-custom-scrollbar-track {
   position: fixed;
-  z-index: 10000;
+  z-index: 70;
   top: 0;
   width: 10px;
   background: transparent;
@@ -1782,6 +1782,27 @@ button {
   display: block;
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(124, 134, 255, 0.85), rgba(96, 165, 250, 0.85));
+}
+
+.composer-stats-compact {
+  margin-left: auto;
+  padding: 4px 9px;
+  border: 1px solid rgba(124, 134, 255, 0.26);
+  border-radius: 999px;
+  color: rgba(226, 232, 240, 0.88);
+  background: rgba(124, 134, 255, 0.08);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.composer-stats-compact:hover:not(:disabled) {
+  border-color: rgba(124, 134, 255, 0.46);
+  background: rgba(124, 134, 255, 0.14);
+}
+
+.composer-stats-compact:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .composer-footer {

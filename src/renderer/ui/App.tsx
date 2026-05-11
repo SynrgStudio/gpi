@@ -244,6 +244,7 @@ function useCustomScrollbars(): void {
       const fullTop = (element.scrollTop / maxScrollTop) * maxThumbTop;
       const clippedTop = Math.min(Math.max(fullTrackTop + fullTop, trackTop), Math.max(trackTop, trackBottom - height));
       track.hidden = trackHeight <= 0;
+      track.style.zIndex = element.closest(".confirm-backdrop") ? "10010" : "70";
       track.style.left = `${Math.round(Math.min(rect.right, clippedRect.right) - borderRight - trackWidth - inset).toString()}px`;
       track.style.top = `${Math.round(trackTop).toString()}px`;
       track.style.height = `${Math.round(trackHeight).toString()}px`;
@@ -341,9 +342,10 @@ export function App() {
   const selectedBackendHandle = selectedSession ? workspace.backendHandles[selectedSession.id] : undefined;
   const selectedSessionFile = selectedSession ? workspace.sessionFiles[selectedSession.id] : undefined;
   const selectedSessionArchived = selectedSession ? Boolean(workspace.archivedSessions[selectedSession.id]) : false;
-  const selectedSessionBusy = selectedSession ? activeStatuses.has(selectedSession.status) && Boolean(selectedBackendHandle) : false;
-  const selectedModelOptions = selectedBackendHandle ? modelOptionsByHandle[selectedBackendHandle] : undefined;
   const selectedCompactionOptions = selectedBackendHandle ? compactionOptionsByHandle[selectedBackendHandle] : undefined;
+  const selectedSessionCompacting = Boolean(selectedCompactionOptions?.isCompacting);
+  const selectedSessionBusy = selectedSession ? (activeStatuses.has(selectedSession.status) || selectedSessionCompacting) && Boolean(selectedBackendHandle) : false;
+  const selectedModelOptions = selectedBackendHandle ? modelOptionsByHandle[selectedBackendHandle] : undefined;
 
   useEffect(() => {
     if (!window.gpi) return;
@@ -1189,6 +1191,7 @@ export function App() {
         }));
       }
       if (!handle) return;
+      setCompactionOptionsByHandle((current) => ({ ...current, [handle]: { ...(current[handle] ?? { autoCompactionEnabled: false }), isCompacting: true } }));
       const options = await window.gpi.compactSession(handle);
       setCompactionOptionsByHandle((current) => ({ ...current, [handle]: options }));
       setWorkspace((current) => reducePiEvent(markSessionSidebarActivity(current, session.id, "Compacted", "completed"), {
@@ -1348,10 +1351,13 @@ export function App() {
           draft={selectedDraft}
           hasRealHandle={Boolean(selectedBackendHandle)}
           isBusy={selectedSessionBusy}
+          isCompacting={selectedSessionCompacting}
           modelOptions={selectedModelOptions}
           selectedSession={selectedSession}
           sessionStats={selectedSessionStats}
           onAbort={() => void abortSelectedRun()}
+          onAbortCompaction={() => void abortSelectedCompaction()}
+          onCompact={() => void compactSelectedSession()}
           onChange={updateDraft}
           onModelChange={(value) => void changeModel(value)}
           onSend={() => sendPrompt()}
@@ -3050,11 +3056,14 @@ function Composer(props: {
   draft: string;
   hasRealHandle: boolean;
   isBusy: boolean;
+  isCompacting: boolean;
   modelOptions: GpiModelOptions | undefined;
   selectedSession: GpiSessionSummary | undefined;
   sessionStats: string | undefined;
   onAbort: () => void;
+  onAbortCompaction: () => void;
   onChange: (value: string) => void;
+  onCompact: () => void;
   onModelChange: (value: string) => void;
   onSend: () => void;
   onThinkingChange: (value: string) => void;
@@ -3072,6 +3081,7 @@ function Composer(props: {
   const models = selectableModels(props.modelOptions);
   const canSelectModel = props.hasRealHandle && !props.isBusy && models.length > 0;
   const canSelectThinking = props.hasRealHandle && !props.isBusy && Boolean(props.modelOptions?.supportsThinking);
+  const composerStatus = props.isCompacting ? "Compacting" : props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi SDK connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session";
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -3106,7 +3116,7 @@ function Composer(props: {
         <div className="composer-footer">
           <div className="composer-context">
             <span>{props.selectedSession?.title ?? "No session selected"}</span>
-            <span>{props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi SDK connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session"}</span>
+            <span>{composerStatus}</span>
           </div>
           <div className="composer-model-controls">
             {props.showPlanRefinement ? <button className="mode-button" onClick={props.onPlanRefinement} title="Refine the active continuity plan or add more tasks before continuing execution" type="button">Plan</button> : null}
@@ -3139,13 +3149,14 @@ function Composer(props: {
             />
           </div>
           <div className="composer-controls">
-            {props.isBusy && props.hasRealHandle ? <button className="abort-button" onClick={props.onAbort} title="Abort the running Pi turn" type="button">Abort</button> : null}
-            <button className="send-button" disabled={props.disabled || props.draft.trim().length === 0} onClick={props.onSend} title={props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
-              {props.isBusy && props.hasRealHandle ? "Follow up" : "Send"}
+            {props.isCompacting && props.hasRealHandle ? <button className="abort-button" onClick={props.onAbortCompaction} title="Abort compaction" type="button">Abort compact</button> : null}
+            {props.isBusy && props.hasRealHandle && !props.isCompacting ? <button className="abort-button" onClick={props.onAbort} title="Abort the running Pi turn" type="button">Abort</button> : null}
+            <button className="send-button" disabled={props.disabled || props.isCompacting || props.draft.trim().length === 0} onClick={props.onSend} title={props.isCompacting ? "Wait for compaction to finish" : props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
+              {props.isBusy && props.hasRealHandle && !props.isCompacting ? "Follow up" : "Send"}
             </button>
           </div>
         </div>
-        {props.sessionStats ? <ComposerStats summary={props.sessionStats} /> : null}
+        {props.sessionStats ? <ComposerStats canCompact={props.hasRealHandle && !props.isBusy} isCompacting={props.isCompacting} summary={props.sessionStats} onCompact={props.onCompact} /> : null}
       </div>
     </footer>
   );
@@ -3159,7 +3170,7 @@ function workflowButtonTitle(label: string, hasSeparatePlanButton: boolean): str
   return label;
 }
 
-function ComposerStats(props: { summary: string }) {
+function ComposerStats(props: { canCompact: boolean; isCompacting: boolean; summary: string; onCompact: () => void }) {
   const stats = parseSessionStatsSummary(props.summary);
   return (
     <div className="composer-stats-bar" title={props.summary}>
@@ -3175,6 +3186,9 @@ function ComposerStats(props: { summary: string }) {
         </span>
       ) : null}
       {!stats.hasStructuredParts ? <span>{props.summary}</span> : null}
+      <button className="composer-stats-compact" disabled={!props.canCompact || props.isCompacting} onClick={props.onCompact} title={props.isCompacting ? "Compaction is running" : "Compact this Pi session"} type="button">
+        {props.isCompacting ? "Compacting" : "Compact"}
+      </button>
     </div>
   );
 }

@@ -24,6 +24,29 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.7] - 2026-05-11
+
+### Added
+
+- Added a composer session-stats Compact button for the selected real Pi session.
+
+### Changed
+
+- Composer status now shows Compacting during active compaction and exposes Abort compact.
+- Session stats now refresh automatically after compaction events.
+
+### Fixed
+
+- Fixed compaction stats appearing stale until the next message.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.6] - 2026-05-11
 
 ### Added
