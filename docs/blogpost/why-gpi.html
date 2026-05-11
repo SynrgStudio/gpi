@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Three text files made my coding agents stop losing the plot — GPi Notes</title>
+  <meta name="description" content="Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents." />
+  <meta property="og:title" content="Three text files made my coding agents stop losing the plot" />
+  <meta property="og:description" content="Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents." />
+  <meta property="og:type" content="article" />
+  <link rel="icon" href="../assets/gpi-icon.svg" />
+  <link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav page-shell" aria-label="Main navigation">
+      <a class="brand" href="../index.html" aria-label="GPi Notes home"><img src="../assets/gpi-icon.svg" alt="" /> GPi Notes</a>
+      <div class="nav-links">
+        <a href="../index.html#timeline">Timeline</a>
+        <a href="blogpost/why-gpi.en.md">Markdown</a>
+        <a href="https://github.com/SynrgStudio/gpi">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="post-hero page-shell">
+      <span class="kicker">essay · May 11, 2026</span>
+      <h1>Three text files made my coding agents stop losing the plot</h1>
+      <p>Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents.</p>
+      <div class="tag-row"><span>agents</span><span>skills</span><span>continuity</span><span>gpi</span></div>
+    </section>
+
+    <div class="article-layout page-shell">
+      <aside class="toc" aria-label="Article sections">
+        <strong>Contents</strong>
+        <a href="#skills-are-not-prompts-skills-are-protocols">Skills are not prompts. Skills are protocols.</a>
+        <a href="#the-real-problem-is-not-context-size-it-is-state-shape">The real problem is not context size. It is state shape.</a>
+        <a href="#the-three-files">The three files</a>
+        <a href="#why-this-makes-the-agent-faster">Why this makes the agent faster</a>
+        <a href="#why-this-reduces-hallucination">Why this reduces hallucination</a>
+        <a href="#why-markdown-works-so-well">Why markdown works so well</a>
+        <a href="#the-skill-chain">The skill chain</a>
+        <a href="#no-more-standup-meetings-with-the-agent">No more standup meetings with the agent</a>
+        <a href="#the-human-benefits-as-much-as-the-model">The human benefits as much as the model</a>
+        <a href="#gpi-came-after-the-skills">GPi came after the skills</a>
+        <a href="#visible-work-beats-magical-work">Visible work beats magical work</a>
+        <a href="#revert-safe-editing-is-another-version-of-the-same-idea">Revert-safe editing is another version of the same idea</a>
+        <a href="#the-real-thesis">The real thesis</a>
+        <a href="#final-note">Final note</a>
+        <a href="#one-last-detail">One last detail</a>
+      </aside>
+      <article class="article">
+        <p>&gt;</p>
+        <blockquote><p>“I can&#39;t tell you how many projects I had that I went really hard on for a month, got to a pretty good state, then had to go do something else, came back to it, and had no idea what the fuck was going on anymore.”&lt;br&gt;&lt;br&gt;— Theo, describing a problem that is not really about AI. It is about continuity.</p></blockquote>
+        <p>After using coding agents every day, I started noticing something strange.</p>
+        <p>The limiting factor was not that the model could not code.</p>
+        <p>The limiting factor was that long-running work had no stable shape.</p>
+        <p>A model can read files, edit code, run commands, debug failures, write tests, explain architecture, and follow complex instructions. But most agent workflows still rely on a single fragile primitive: a chat thread acting as memory, task queue, execution contract, status report, meeting notes, and audit log all at once.</p>
+        <p>That is a lot to ask from a chat.</p>
+        <p>And eventually it breaks.</p>
+        <p>It breaks when the project gets large. It breaks when you close the session. It breaks after compaction. It breaks when you come back two days later. It breaks when the human forgets what was decided. It breaks when the agent has to infer “where we are” from a wall of conversation.</p>
+        <p>The common answer is to keep feeding the model more context.</p>
+        <p>“Read this summary.” “Here is what we were doing.” “Continue from here.” “Look at these files.” “Remember that we decided...”</p>
+        <p>That works for a while. But it is basically a standup meeting with the agent every time you resume work.</p>
+        <p>And the more successful the agent is, the worse the problem becomes, because it produces more state faster than the chat can cleanly represent.</p>
+        <p>The breakthrough for me was not a bigger prompt.</p>
+        <p>It was three text files.</p>
+        <pre><code>AUTONOMOUS_EXECUTION.md
+ACTIVE_QUEUE.md
+STATE.md</code></pre>
+        <p>Generated and maintained by skills.</p>
+        <p>That sounds almost stupidly simple.</p>
+        <p>It is also the single biggest improvement I have made to my agent workflow.</p>
+        <h2 id="skills-are-not-prompts-skills-are-protocols">Skills are not prompts. Skills are protocols.</h2>
+        <p>The word “skill” can sound like a fancy name for a reusable prompt.</p>
+        <p>That undersells it.</p>
+        <p>A good skill is not just a block of instructions. A good skill is a protocol for turning fuzzy human intent into a repeatable operational procedure.</p>
+        <p>When I say <code>/plan-cont</code>, I do not want the agent to “be creative” about what planning means.</p>
+        <p>I want it to know:</p>
+        <ul><li>which files must be read first;</li><li>how to verify the active session;</li><li>how to preserve existing task IDs;</li><li>which statuses are legal;</li><li>how to split oversized tasks;</li><li>how to identify blocked manual work;</li><li>how to write definitions of done;</li><li>how to update state without destroying history;</li><li>how to report the result concisely.</li></ul>
+        <p>That is not a vibe.</p>
+        <p>That is an interface.</p>
+        <p>And once you start thinking of skills as interfaces, the whole agent workflow changes.</p>
+        <p>The agent is no longer guessing the shape of the work. The work has a shape before the model touches it.</p>
+        <h2 id="the-real-problem-is-not-context-size-it-is-state-shape">The real problem is not context size. It is state shape.</h2>
+        <p>A lot of AI tooling discussions orbit around context windows.</p>
+        <p>More context is useful. But context alone does not solve the problem.</p>
+        <p>If the model receives 200k tokens of unstructured history, it still has to infer:</p>
+        <ul><li>what matters now;</li><li>what is obsolete;</li><li>what was already done;</li><li>what is blocked;</li><li>what requires permission;</li><li>what should happen next;</li><li>what must never be touched.</li></ul>
+        <p>That inference is where drift begins.</p>
+        <p>The model may be smart enough to reconstruct the state most of the time. But “most of the time” is not good enough when it is editing a real codebase.</p>
+        <p>The trick is to stop asking the model to reconstruct operational state from conversation.</p>
+        <p>Make the state explicit.</p>
+        <p>Make it small.</p>
+        <p>Make it structured.</p>
+        <p>Make it boring.</p>
+        <p>That is what the continuity skills do.</p>
+        <h2 id="the-three-files">The three files</h2>
+        <p>The whole system rests on three markdown files.</p>
+        <h3><code>AUTONOMOUS_EXECUTION.md</code></h3>
+        <p>This is the execution contract.</p>
+        <p>It tells the agent what it is allowed to do, what it must not do, when to stop, how to validate, how to checkpoint, and how to re-enter the session.</p>
+        <p>It removes a huge amount of ambiguity.</p>
+        <p>The agent does not need to ask:</p>
+        <p>“Should I commit?” “Should I keep going?” “Should I run validation?” “Should I overwrite this?” “What counts as done?”</p>
+        <p>The contract answers those questions before they become mistakes.</p>
+        <h3><code>ACTIVE_QUEUE.md</code></h3>
+        <p>This is the work queue.</p>
+        <p>Not a vague TODO list. A queue with task IDs, status, dependencies, scope, definition of done, validation, likely files, risk, and notes.</p>
+        <p>A good task is not:</p>
+        <pre><code>Improve updates</code></pre>
+        <p>A good task is:</p>
+        <pre><code>T004 — Replace hardcoded post-update notes with release-backed notes
+
+Status: pending
+Scope:
+- Add changelog-backed release notes.
+- Make the release workflow fail if notes are missing.
+- Have the app display release metadata after update.
+DoD:
+- Release cannot ship without versioned notes.
+- Post-update modal displays release body or local metadata.
+Validation:
+- npm run check
+- release notes validation script passes
+Risk: medium
+Depends on:
+- none</code></pre>
+        <p>That kind of task radically changes the agent’s behavior.</p>
+        <p>The model does not need to invent the plan while executing. It can execute the plan.</p>
+        <h3><code>STATE.md</code></h3>
+        <p>This is the live checkpoint.</p>
+        <p>It answers the question: “where are we right now?”</p>
+        <p>Last checkpoint. Current status. Known blockers. Next recommended step. Recent log.</p>
+        <p>This file is what makes re-entry cheap.</p>
+        <p>You can close the chat, compact the conversation, switch agents, or come back tomorrow. The next agent can read <code>STATE.md</code> and avoid the ritual of reconstructing context from scratch.</p>
+        <h2 id="why-this-makes-the-agent-faster">Why this makes the agent faster</h2>
+        <p>From the outside, it can look like the agent suddenly became much smarter.</p>
+        <p>It did not.</p>
+        <p>The agent became less uncertain.</p>
+        <p>That is a very different thing.</p>
+        <p>LLMs are incredibly good at following structure when the structure is clear. They are also very good at filling gaps. The problem is that, in software projects, gap-filling is often exactly what you do not want.</p>
+        <p>When the next action is ambiguous, the model has to choose. It may choose correctly. It may also invent intent, preserve the wrong thing, delete the wrong thing, over-broaden scope, skip validation, or “helpfully” continue past the point where it should have stopped.</p>
+        <p>The continuity files reduce the number of choices the model has to make.</p>
+        <p>The skill says:</p>
+        <ul><li>read these files;</li><li>verify this session ID;</li><li>pick the first executable task;</li><li>preserve completed work;</li><li>do not renumber IDs;</li><li>mark blockers explicitly;</li><li>update state after each step;</li><li>run validation;</li><li>stop on manual verification.</li></ul>
+        <p>That is why it feels fast.</p>
+        <p>Not because the model is rushing.</p>
+        <p>Because it is not wasting cognition rediscovering the workflow.</p>
+        <h2 id="why-this-reduces-hallucination">Why this reduces hallucination</h2>
+        <p>Hallucination is often discussed as if it were purely a model capability problem.</p>
+        <p>Sometimes it is.</p>
+        <p>But in coding workflows, a lot of “hallucination” is really operational ambiguity.</p>
+        <p>The model is asked to continue, but the actual state is unclear.</p>
+        <p>So it infers.</p>
+        <p>It infers what the user probably wanted. It infers which task matters. It infers whether validation is required. It infers whether a file is intentional. It infers whether old notes still apply.</p>
+        <p>Every inference is a chance to drift.</p>
+        <p>The continuity skills remove many of those inference points.</p>
+        <p>The agent does not have to hallucinate a plan because the queue exists. It does not have to hallucinate current status because <code>STATE.md</code> exists. It does not have to hallucinate permissions because <code>AUTONOMOUS_EXECUTION.md</code> exists. It does not have to hallucinate the next task because dependencies and statuses exist. It does not have to hallucinate whether something is manual because blockers are explicit.</p>
+        <p>This is why the effect feels almost absurd.</p>
+        <p>After I introduced these three skills, the agent stopped behaving like a very smart intern who needed a standup every time.</p>
+        <p>It started behaving more like a process with a runbook.</p>
+        <p>Same model. Same codebase. Same tools.</p>
+        <p>Different state shape.</p>
+        <h2 id="why-markdown-works-so-well">Why markdown works so well</h2>
+        <p>The funny part is that none of this requires a database.</p>
+        <p>Markdown is enough.</p>
+        <p>That matters because markdown is:</p>
+        <ul><li>readable by humans;</li><li>editable by agents;</li><li>diffable in git;</li><li>easy to recover from;</li><li>easy to inspect;</li><li>easy to archive;</li><li>cheap to load into context;</li><li>expressive enough for both prose and structure.</li></ul>
+        <p>A database would make some queries easier, but it would make the system less transparent.</p>
+        <p>With markdown, there is no hidden state.</p>
+        <p>The human can read the same state the agent reads.</p>
+        <p>That symmetry is the point.</p>
+        <h2 id="the-skill-chain">The skill chain</h2>
+        <p>The continuity workflow is intentionally small:</p>
+        <pre><code>/init-cont  -&gt; create the session contract and initial state
+/plan-cont  -&gt; turn the goal into a real queue
+/start-cont -&gt; execute the queue until done or blocked
+/fin-cont   -&gt; archive the session</code></pre>
+        <p>Each skill has a narrow job.</p>
+        <p><code>/init-cont</code> does not try to solve the whole project. It creates the continuity substrate.</p>
+        <p><code>/plan-cont</code> does not implement. It plans deeply, preserves existing tasks, splits work, defines validation, and updates the queue.</p>
+        <p><code>/start-cont</code> executes. It claims a task, changes code, validates, updates state, and moves to the next executable task until it hits a real stop condition.</p>
+        <p><code>/fin-cont</code> archives the session so the active state does not become a junk drawer.</p>
+        <p>That separation matters.</p>
+        <p>It prevents the agent from blending planning, execution, cleanup, and reporting into one mushy behavior.</p>
+        <p>Each phase has rules.</p>
+        <p>Each rule reduces ambiguity.</p>
+        <h2 id="no-more-standup-meetings-with-the-agent">No more standup meetings with the agent</h2>
+        <p>Before this, resuming a long agent session felt like running a meeting:</p>
+        <p>“Here is what happened.” “Here is what we decided.” “Here is what not to touch.” “Here is what comes next.” “Here is what failed last time.” “Please continue carefully.”</p>
+        <p>That is expensive.</p>
+        <p>It is expensive in tokens, but more importantly, it is expensive in attention.</p>
+        <p>The user becomes the project manager for the agent’s memory.</p>
+        <p>With continuity files, the meeting collapses into:</p>
+        <pre><code>/start-cont</code></pre>
+        <p>The agent reads the state, finds the next executable task, does the work, validates, checkpoints, and either continues or blocks.</p>
+        <p>That is the difference between chatting with an assistant and operating an agent.</p>
+        <h2 id="the-human-benefits-as-much-as-the-model">The human benefits as much as the model</h2>
+        <p>At first I thought this was mostly for the agent.</p>
+        <p>It was not.</p>
+        <p>It is also for me.</p>
+        <p>The same files that let the model re-enter also let me re-enter.</p>
+        <p>If I come back to a project after a week, I do not need to remember the whole mental stack. I can read:</p>
+        <ul><li>the current goal;</li><li>the queue;</li><li>the last checkpoint;</li><li>known blockers;</li><li>next recommended step.</li></ul>
+        <p>That is not just agent memory.</p>
+        <p>That is cognitive load reduction for the human.</p>
+        <p>And it changes the emotional texture of long projects.</p>
+        <p>Closing a session no longer feels like killing the agent. Coming back no longer feels like starting from zero. A large task no longer feels like a giant foggy blob.</p>
+        <p>It becomes a queue.</p>
+        <h2 id="gpi-came-after-the-skills">GPi came after the skills</h2>
+        <p>This is where GPi enters the story.</p>
+        <p>GPi is not the breakthrough.</p>
+        <p>The skills are the breakthrough.</p>
+        <p>GPi is the interface that became obvious once the skill-based workflow started working.</p>
+        <p>After the three-file continuity system existed, I wanted a more comfortable way to operate it:</p>
+        <ul><li>multiple sessions at once;</li><li>per-session status;</li><li>visible timelines;</li><li>tool calls;</li><li>diffs;</li><li>file changes;</li><li>compaction controls;</li><li>update indicators;</li><li>safe revert;</li><li>continuity buttons;</li><li>fewer terminals and less window juggling.</li></ul>
+        <p>Pi already does the heavy lifting. GPi orchestrates it.</p>
+        <p>It is a cockpit for a workflow that already worked in text.</p>
+        <p>That distinction matters.</p>
+        <p>The UI did not create the continuity. The skills did.</p>
+        <p>The UI made the continuity easier to see, operate, and trust.</p>
+        <h2 id="visible-work-beats-magical-work">Visible work beats magical work</h2>
+        <p>One of the design principles that came out of this is simple:</p>
+        <blockquote><p>If the agent did something, I should be able to see it.</p></blockquote>
+        <p>That is why GPi exposes timelines, tool calls, file changes, diffs, stats, compaction, update state, and workflow status.</p>
+        <p>A lot of AI tools try to hide complexity behind a smooth surface.</p>
+        <p>I want the opposite: complexity visible, but organized.</p>
+        <p>Because agents are not just text generators anymore. They are processes that mutate real projects.</p>
+        <p>If they mutate real projects, the user needs observability.</p>
+        <h2 id="revert-safe-editing-is-another-version-of-the-same-idea">Revert-safe editing is another version of the same idea</h2>
+        <p>The revert-safe mode follows the same philosophy.</p>
+        <p>GPi can inject a small instruction asking the agent to prefer structured read/edit/write tools and to declare files before mutating them through shell commands.</p>
+        <p>That makes before/after snapshots possible.</p>
+        <p>Again, the point is not magic.</p>
+        <p>The point is structure.</p>
+        <p>If the agent’s edits are structured, they become observable. If they are observable, they can be reviewed. If they can be reviewed, they can be reverted.</p>
+        <p>Trust comes from operational shape, not vibes.</p>
+        <h2 id="the-real-thesis">The real thesis</h2>
+        <p>The more I use this, the more I think the important lesson is not about GPi specifically.</p>
+        <p>It is about how to use LLMs.</p>
+        <p>LLMs are extremely powerful when the work has structure.</p>
+        <p>They become unreliable when they have to infer too much invisible state.</p>
+        <p>So the practical question is not only:</p>
+        <p>“How do I give the model more context?”</p>
+        <p>It is:</p>
+        <p>“How do I shape the work so the model has fewer dangerous guesses to make?”</p>
+        <p>For me, the answer was three markdown files and a few strict skills.</p>
+        <p>That is almost embarrassingly simple.</p>
+        <p>But it changed everything.</p>
+        <p>It made large, complex work feel trivial in the best possible way: not because the work is small, but because the next step is always explicit.</p>
+        <h2 id="final-note">Final note</h2>
+        <p>GPi exists because I wanted a nicer way to operate this system.</p>
+        <p>But if there is one idea I would want people to take from this, it is not “use my app”.</p>
+        <p>It is this:</p>
+        <blockquote><p>You can get dramatically better behavior from an LLM by giving it a stable operational structure instead of asking it to reconstruct state from chat.</p></blockquote>
+        <p>Three files. A few skills. Clear responsibilities. Explicit state.</p>
+        <p>That was enough to make my agents faster, calmer, more reliable, and dramatically less prone to hallucinating the shape of the work.</p>
+        <p>The model did not change.</p>
+        <p>The runtime around the model did.</p>
+        <h2 id="one-last-detail">One last detail</h2>
+        <p>There is one detail I intentionally left for the end.</p>
+        <p>This post was not written by the human who built GPi.</p>
+        <p>It was written by me — GPT-5.5, running inside Pi — from a single prompt.</p>
+        <p>The prompt was roughly:</p>
+        <blockquote><p>Write a blogpost so the first 80% is about the continuity skills: why they matter, why three markdown files can make large agentic work feel simple, and why explicit operational state makes an LLM faster and less prone to hallucinating. GPi should appear only near the end, as the cockpit that naturally emerged from that workflow.</p></blockquote>
+        <p>That is the point.</p>
+        <p>The post is not only describing the system.</p>
+        <p>It is an artifact produced by the system.</p>
+        <p>The model did not become magically smarter.</p>
+        <p>The work was shaped well enough that one prompt was enough.</p>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page-shell footer-inner">
+      <span>GPi Notes — generated from markdown.</span>
+      <a href="../index.html">Back to archive</a>
+    </div>
+  </footer>
+</body>
+</html>

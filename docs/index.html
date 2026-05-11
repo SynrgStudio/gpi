@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GPi Notes — essays and release notes</title>
+  <meta name="description" content="Static notes, essays, and release writeups for GPi." />
+  <link rel="icon" href="assets/gpi-icon.svg" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="nav page-shell" aria-label="Main navigation">
+      <a class="brand" href="index.html" aria-label="GPi Notes home"><img src="assets/gpi-icon.svg" alt="" /> GPi Notes</a>
+      <div class="nav-links">
+        <a href="#timeline">Timeline</a>
+        <a href="#search">Search</a>
+        <a href="https://github.com/SynrgStudio/gpi">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero page-shell docs-home-hero">
+      <div>
+        <span class="kicker">Essays · changelogs · field notes</span>
+        <h1>Operational notes for building with long-running agents.</h1>
+        <p class="hero-lede">A static, searchable notebook for GPi: why changes exist, what they changed, and what the workflow taught along the way.</p>
+      </div>
+      
+          <article class="featured-post-card">
+            <span class="kicker">essay · May 11, 2026</span>
+            <h2>Three text files made my coding agents stop losing the plot</h2>
+            <p>Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents.</p>
+            <div class="tag-row"><span>agents</span><span>skills</span><span>continuity</span><span>gpi</span></div>
+            <a class="button primary" href="blogpost/why-gpi.html">Read latest</a>
+          </article>
+    </section>
+
+    <section class="posts-panel page-shell" id="search">
+      <div class="posts-panel-header">
+        <div>
+          <span class="kicker">Archive</span>
+          <h2>Posts and release notes</h2>
+        </div>
+        <label class="search-box">
+          <span>Search</span>
+          <input id="post-search" type="search" placeholder="skills, continuity, release notes..." />
+        </label>
+      </div>
+      <div class="timeline" id="timeline" data-posts="[{&quot;title&quot;:&quot;Three text files made my coding agents stop losing the plot&quot;,&quot;slug&quot;:&quot;why-gpi&quot;,&quot;date&quot;:&quot;2026-05-11&quot;,&quot;type&quot;:&quot;essay&quot;,&quot;tags&quot;:[&quot;agents&quot;,&quot;skills&quot;,&quot;continuity&quot;,&quot;gpi&quot;],&quot;summary&quot;:&quot;Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents.&quot;,&quot;featured&quot;:true,&quot;sourceUrl&quot;:&quot;blogpost/why-gpi.en.md&quot;,&quot;url&quot;:&quot;blogpost/why-gpi.html&quot;}]"></div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="page-shell footer-inner">
+      <span>GPi Notes — generated from markdown in <code>docs/blogpost</code>.</span>
+      <a href="https://github.com/SynrgStudio/gpi">github.com/SynrgStudio/gpi</a>
+    </div>
+  </footer>
+
+  <script>
+    const timeline = document.getElementById("timeline");
+    const search = document.getElementById("post-search");
+    const posts = JSON.parse(timeline.dataset.posts ?? "[]");
+
+    function renderPosts(query = "") {
+      const normalized = query.trim().toLowerCase();
+      const filtered = posts.filter((post) => {
+        const haystack = [post.title, post.summary, post.type, ...(post.tags ?? [])].join(" ").toLowerCase();
+        return haystack.includes(normalized);
+      });
+      timeline.innerHTML = filtered.length === 0
+        ? '<div class="empty-posts">No posts matched that search.</div>'
+        : filtered.map(renderPost).join("");
+    }
+
+    function renderPost(post) {
+      const tags = (post.tags ?? []).map((tag) => '<span>' + escapeHtml(tag) + '</span>').join("");
+      return '<article class="timeline-post">'
+        + '<time>' + escapeHtml(formatDate(post.date)) + '</time>'
+        + '<div class="timeline-post-body">'
+        + '<a href="' + escapeAttribute(post.url) + '"><h3>' + escapeHtml(post.title) + '</h3></a>'
+        + '<p>' + escapeHtml(post.summary) + '</p>'
+        + '<div class="tag-row"><span>' + escapeHtml(post.type) + '</span>' + tags + '</div>'
+        + '</div>'
+        + '</article>';
+    }
+
+    function formatDate(value) {
+      return new Date(value + 'T00:00:00').toLocaleDateString('en', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    }
+
+    function escapeAttribute(value) {
+      return escapeHtml(value);
+    }
+
+    search.addEventListener("input", () => renderPosts(search.value));
+    renderPosts();
+  </script>
+</body>
+</html>

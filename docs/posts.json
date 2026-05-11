@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Three text files made my coding agents stop losing the plot",
+    "slug": "why-gpi",
+    "date": "2026-05-11",
+    "type": "essay",
+    "tags": [
+      "agents",
+      "skills",
+      "continuity",
+      "gpi"
+    ],
+    "summary": "Three markdown files, a few strict skills, and a better runtime shape for long-running coding agents.",
+    "featured": true,
+    "sourceUrl": "blogpost/why-gpi.en.md",
+    "url": "blogpost/why-gpi.html"
+  }
+]

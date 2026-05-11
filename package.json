@@ -14,7 +14,8 @@
     "package:win": "npm run build && node scripts/package-win.mjs",
     "installer:win": "npm run package:win && node scripts/build-installer-win.mjs",
     "release:notes": "node scripts/validate-release-notes.mjs",
-    "release:prepare": "node scripts/prepare-release.mjs"
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "docs:build": "node scripts/build-docs.mjs"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "latest",
