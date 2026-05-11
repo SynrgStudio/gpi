@@ -17,7 +17,7 @@ draft: false
 
 > “I can't tell you how many projects I had that I went really hard on for a month, got to a pretty good state, then had to go do something else, came back to it, and had no idea what the fuck was going on anymore.”
 >
-> — Theo, describing a problem that is not really about AI. It is about continuity.
+> — [Theo](https://youtu.be/lNVa33qUzZ8?t=701), describing a problem that is not really about AI. It is about continuity.
 
 After using coding agents every day, I started noticing something strange.
 
@@ -150,6 +150,27 @@ The agent does not need to ask:
 
 The contract answers those questions before they become mistakes.
 
+A small example of the shape it creates:
+
+```md
+---
+continuity_session: CONT-2026-05-11-feature-work
+status: active
+goal: Ship the next validated slice without losing state.
+---
+
+## Allowed actions
+- Read project docs and source.
+- Edit source, tests, packaging scripts, and docs.
+- Run validation after code changes.
+
+## Stop conditions
+- User asks to stop.
+- Validation fails and the root cause is unclear.
+- A task requires manual product validation.
+- A git/release operation is needed but not requested.
+```
+
 ### `ACTIVE_QUEUE.md`
 
 This is the work queue.
@@ -194,6 +215,27 @@ This is the live checkpoint.
 It answers the question: “where are we right now?”
 
 Last checkpoint. Current status. Known blockers. Next recommended step. Recent log.
+
+A typical checkpoint looks boring, which is exactly why it works:
+
+```md
+## Current status
+
+T004 is done. T005 is next. The updater validation task is blocked until a future release exists.
+
+## Last checkpoint
+
+2026-05-11 17:10 — Completed release-backed post-update notes.
+
+## Known blockers
+
+- Windows installer behavior requires manual validation.
+- Linux packaging requires a Linux runner.
+
+## Next recommended step
+
+Continue with T005 — Add safe project file listing API.
+```
 
 This file is what makes re-entry cheap.
 
@@ -326,6 +368,45 @@ It prevents the agent from blending planning, execution, cleanup, and reporting 
 Each phase has rules.
 
 Each rule reduces ambiguity.
+
+### Read the actual skills
+
+The snippets below are intentionally small, but the full skill files are public. If you want to see the real protocol, start here:
+
+- [Read the `init-cont` skill](https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/init-cont/SKILL.md)
+- [Read the `plan-cont` skill](https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/plan-cont/SKILL.md)
+- [Read the `start-cont` skill](https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/start-cont/SKILL.md)
+- [Read the `end-cont` skill](https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/end-cont/SKILL.md)
+
+A tiny, non-sensitive glimpse of the skills looks like this:
+
+```md
+# /init-cont
+Read the goal, create AUTONOMOUS_EXECUTION.md, ACTIVE_QUEUE.md, and STATE.md.
+Do not implement. Establish the session contract and initial queue.
+```
+
+```md
+# /plan-cont
+Read the three active files, verify they share the same continuity_session,
+preserve existing task IDs, split work by dependency, and update ACTIVE_QUEUE.md.
+```
+
+```md
+# /start-cont
+Pick the first pending task whose dependencies are done, claim it,
+implement the smallest valid slice, validate it, checkpoint STATE.md, then continue or block.
+```
+
+```md
+# /fin-cont
+Archive the session files, clear the active queue, write a final snapshot,
+and suggest a commit message. Do not commit unless asked.
+```
+
+None of those snippets are clever by themselves.
+
+The power comes from the fact that the agent does not have to rediscover those rules every time.
 
 ## No more standup meetings with the agent
 

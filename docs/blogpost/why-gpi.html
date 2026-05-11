@@ -51,8 +51,7 @@
         <a href="#one-last-detail">One last detail</a>
       </aside>
       <article class="article">
-        <p>&gt;</p>
-        <blockquote><p>“I can&#39;t tell you how many projects I had that I went really hard on for a month, got to a pretty good state, then had to go do something else, came back to it, and had no idea what the fuck was going on anymore.”&lt;br&gt;&lt;br&gt;— Theo, describing a problem that is not really about AI. It is about continuity.</p></blockquote>
+        <blockquote><p>“I can&#39;t tell you how many projects I had that I went really hard on for a month, got to a pretty good state, then had to go do something else, came back to it, and had no idea what the fuck was going on anymore.”<br><br>— <a href="https://youtu.be/lNVa33qUzZ8?t=701" rel="noreferrer" target="_blank">Theo</a>, describing a problem that is not really about AI. It is about continuity.</p></blockquote>
         <p>After using coding agents every day, I started noticing something strange.</p>
         <p>The limiting factor was not that the model could not code.</p>
         <p>The limiting factor was that long-running work had no stable shape.</p>
@@ -105,6 +104,23 @@ STATE.md</code></pre>
         <p>The agent does not need to ask:</p>
         <p>“Should I commit?” “Should I keep going?” “Should I run validation?” “Should I overwrite this?” “What counts as done?”</p>
         <p>The contract answers those questions before they become mistakes.</p>
+        <p>A small example of the shape it creates:</p>
+        <pre><code>---
+continuity_session: CONT-2026-05-11-feature-work
+status: active
+goal: Ship the next validated slice without losing state.
+---
+
+## Allowed actions
+- Read project docs and source.
+- Edit source, tests, packaging scripts, and docs.
+- Run validation after code changes.
+
+## Stop conditions
+- User asks to stop.
+- Validation fails and the root cause is unclear.
+- A task requires manual product validation.
+- A git/release operation is needed but not requested.</code></pre>
         <h3><code>ACTIVE_QUEUE.md</code></h3>
         <p>This is the work queue.</p>
         <p>Not a vague TODO list. A queue with task IDs, status, dependencies, scope, definition of done, validation, likely files, risk, and notes.</p>
@@ -133,6 +149,23 @@ Depends on:
         <p>This is the live checkpoint.</p>
         <p>It answers the question: “where are we right now?”</p>
         <p>Last checkpoint. Current status. Known blockers. Next recommended step. Recent log.</p>
+        <p>A typical checkpoint looks boring, which is exactly why it works:</p>
+        <pre><code>## Current status
+
+T004 is done. T005 is next. The updater validation task is blocked until a future release exists.
+
+## Last checkpoint
+
+2026-05-11 17:10 — Completed release-backed post-update notes.
+
+## Known blockers
+
+- Windows installer behavior requires manual validation.
+- Linux packaging requires a Linux runner.
+
+## Next recommended step
+
+Continue with T005 — Add safe project file listing API.</code></pre>
         <p>This file is what makes re-entry cheap.</p>
         <p>You can close the chat, compact the conversation, switch agents, or come back tomorrow. The next agent can read <code>STATE.md</code> and avoid the ritual of reconstructing context from scratch.</p>
         <h2 id="why-this-makes-the-agent-faster">Why this makes the agent faster</h2>
@@ -187,6 +220,24 @@ Depends on:
         <p>It prevents the agent from blending planning, execution, cleanup, and reporting into one mushy behavior.</p>
         <p>Each phase has rules.</p>
         <p>Each rule reduces ambiguity.</p>
+        <h3>Read the actual skills</h3>
+        <p>The snippets below are intentionally small, but the full skill files are public. If you want to see the real protocol, start here:</p>
+        <ul><li><a href="https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/init-cont/SKILL.md" rel="noreferrer" target="_blank">Read the <code>init-cont</code> skill</a></li><li><a href="https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/plan-cont/SKILL.md" rel="noreferrer" target="_blank">Read the <code>plan-cont</code> skill</a></li><li><a href="https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/start-cont/SKILL.md" rel="noreferrer" target="_blank">Read the <code>start-cont</code> skill</a></li><li><a href="https://github.com/SynrgStudio/gpi/blob/main/resources/skills/continuity/end-cont/SKILL.md" rel="noreferrer" target="_blank">Read the <code>end-cont</code> skill</a></li></ul>
+        <p>A tiny, non-sensitive glimpse of the skills looks like this:</p>
+        <pre><code># /init-cont
+Read the goal, create AUTONOMOUS_EXECUTION.md, ACTIVE_QUEUE.md, and STATE.md.
+Do not implement. Establish the session contract and initial queue.</code></pre>
+        <pre><code># /plan-cont
+Read the three active files, verify they share the same continuity_session,
+preserve existing task IDs, split work by dependency, and update ACTIVE_QUEUE.md.</code></pre>
+        <pre><code># /start-cont
+Pick the first pending task whose dependencies are done, claim it,
+implement the smallest valid slice, validate it, checkpoint STATE.md, then continue or block.</code></pre>
+        <pre><code># /fin-cont
+Archive the session files, clear the active queue, write a final snapshot,
+and suggest a commit message. Do not commit unless asked.</code></pre>
+        <p>None of those snippets are clever by themselves.</p>
+        <p>The power comes from the fact that the agent does not have to rediscover those rules every time.</p>
         <h2 id="no-more-standup-meetings-with-the-agent">No more standup meetings with the agent</h2>
         <p>Before this, resuming a long agent session felt like running a meeting:</p>
         <p>“Here is what happened.” “Here is what we decided.” “Here is what not to touch.” “Here is what comes next.” “Here is what failed last time.” “Please continue carefully.”</p>
@@ -273,6 +324,25 @@ Depends on:
       </article>
     </div>
   </main>
+
+  <script>
+    const headings = Array.from(document.querySelectorAll(".article h2[id]"));
+    const tocLinks = Array.from(document.querySelectorAll(".toc a"));
+    const linksById = new Map(tocLinks.map((link) => [link.getAttribute("href")?.slice(1), link]));
+
+    function setActiveToc() {
+      let active = headings[0]?.id;
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top <= 140) active = heading.id;
+        else break;
+      }
+      for (const link of tocLinks) link.classList.toggle("active", link === linksById.get(active));
+    }
+
+    window.addEventListener("scroll", setActiveToc, { passive: true });
+    window.addEventListener("resize", setActiveToc);
+    setActiveToc();
+  </script>
 
   <footer class="site-footer">
     <div class="page-shell footer-inner">

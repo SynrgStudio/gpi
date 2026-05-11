@@ -91,10 +91,12 @@ function renderIndexPage(posts) {
   const featuredCard = featured ? `
           <article class="featured-post-card">
             <span class="kicker">${escapeHtml(featured.type)} · ${formatDate(featured.date)}</span>
-            <h2>${escapeHtml(featured.title)}</h2>
+            <a class="featured-title-link" href="${escapeAttribute(featured.url)}"><h2>${escapeHtml(featured.title)}</h2></a>
             <p>${escapeHtml(featured.summary)}</p>
-            <div class="tag-row">${featured.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
-            <a class="button primary" href="${escapeAttribute(featured.url)}">Read latest</a>
+            <div class="featured-post-footer">
+              <div class="tag-row">${featured.tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}</div>
+              <a class="button primary" href="${escapeAttribute(featured.url)}">Read latest</a>
+            </div>
           </article>` : "";
 
   return `<!doctype html>
@@ -245,6 +247,25 @@ function renderPostPage(post, body) {
     </div>
   </main>
 
+  <script>
+    const headings = Array.from(document.querySelectorAll(".article h2[id]"));
+    const tocLinks = Array.from(document.querySelectorAll(".toc a"));
+    const linksById = new Map(tocLinks.map((link) => [link.getAttribute("href")?.slice(1), link]));
+
+    function setActiveToc() {
+      let active = headings[0]?.id;
+      for (const heading of headings) {
+        if (heading.getBoundingClientRect().top <= 140) active = heading.id;
+        else break;
+      }
+      for (const link of tocLinks) link.classList.toggle("active", link === linksById.get(active));
+    }
+
+    window.addEventListener("scroll", setActiveToc, { passive: true });
+    window.addEventListener("resize", setActiveToc);
+    setActiveToc();
+  </script>
+
   <footer class="site-footer">
     <div class="page-shell footer-inner">
       <span>GPi Notes — generated from markdown.</span>
@@ -257,11 +278,18 @@ function renderPostPage(post, body) {
 }
 
 function extractHeadings(markdown) {
-  return markdown
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith("## "))
-    .map((line) => line.replace(/^##\s+/, "").trim())
-    .map((text) => ({ text: stripInlineMarkdown(text), id: slugify(stripInlineMarkdown(text)) }));
+  const headings = [];
+  let inCode = false;
+  for (const line of markdown.split(/\r?\n/)) {
+    if (line.startsWith("```")) {
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode || !line.startsWith("## ")) continue;
+    const text = stripInlineMarkdown(line.replace(/^##\s+/, "").trim());
+    headings.push({ text, id: slugify(text) });
+  }
+  return headings;
 }
 
 function markdownToHtml(markdown) {
@@ -287,7 +315,8 @@ function markdownToHtml(markdown) {
 
   function flushBlockquote() {
     if (blockquote.length === 0) return;
-    html.push(`<blockquote><p>${renderInline(blockquote.join("<br><br>"))}</p></blockquote>`);
+    const content = blockquote.filter((line) => line.trim().length > 0).map((line) => renderInline(line)).join("<br><br>");
+    html.push(`<blockquote><p>${content}</p></blockquote>`);
     blockquote = [];
   }
 
@@ -338,7 +367,7 @@ function markdownToHtml(markdown) {
       continue;
     }
 
-    if (line.startsWith("> ")) {
+    if (/^>\s?/.test(line)) {
       flushParagraph();
       flushList();
       blockquote.push(line.replace(/^>\s?/, ""));
@@ -365,6 +394,7 @@ function markdownToHtml(markdown) {
 function renderInline(text) {
   const escaped = escapeHtml(text);
   return escaped
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" rel="noreferrer" target="_blank">$1</a>')
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/—/g, "—");
