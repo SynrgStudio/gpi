@@ -4,7 +4,7 @@
 #define MyAppExeName "GPi.exe"
 #define MyAppVersion GetEnv("GPI_VERSION")
 #if MyAppVersion == ""
-  #define MyAppVersion "0.0.7"
+  #define MyAppVersion "0.0.8"
 #endif
 
 [Setup]
@@ -26,6 +26,7 @@ WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
+SetupIconFile=..\resources\assets\gpi-logo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Languages]

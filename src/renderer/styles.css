@@ -2842,6 +2842,33 @@ body::after {
   background: rgba(248, 113, 113, 0.1);
 }
 
+.settings-update-dot {
+  position: absolute;
+  right: 7px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgba(7, 10, 18, 0.92);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px rgba(7, 10, 18, 0.46);
+}
+
+.settings-update-dot.tone-ok {
+  background: #34d399;
+}
+
+.settings-update-dot.tone-minor {
+  background: #fbbf24;
+}
+
+.settings-update-dot.tone-major {
+  background: #f87171;
+}
+
+.settings-update-dot.tone-unknown {
+  background: #64748b;
+}
+
 .window-control-minimize,
 .window-control-maximize,
 .window-control-close,
@@ -3039,6 +3066,93 @@ body::after {
 .composer-card {
   border-color: rgba(255, 255, 255, 0.12);
   background: rgba(22, 22, 24, 0.94);
+}
+
+.startup-splash {
+  position: fixed;
+  z-index: 120;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at 50% 50%, rgba(124, 134, 255, 0.18), transparent 30%), rgba(3, 7, 18, 0.72);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+
+.startup-splash-card {
+  display: grid;
+  width: min(420px, calc(100vw - 48px));
+  justify-items: center;
+  gap: 16px;
+  padding: 34px 30px 28px;
+  border-radius: 28px;
+}
+
+.startup-splash-mark {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  place-items: center;
+  color: rgba(244, 244, 245, 0.96);
+}
+
+.startup-splash-mark img {
+  width: 76px;
+  height: 76px;
+  filter: brightness(0) invert(1) drop-shadow(0 12px 24px rgba(0, 0, 0, 0.38));
+}
+
+.startup-splash-copy {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.startup-splash-copy span {
+  display: none;
+}
+
+.startup-splash-copy strong {
+  display: none;
+}
+
+.startup-splash-copy small {
+  color: rgba(191, 219, 254, 0.74);
+  font-size: 12px;
+}
+
+.startup-splash-loader {
+  width: 140px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.startup-splash-loader span {
+  display: block;
+  width: 44%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(124, 134, 255, 0.2), rgba(96, 165, 250, 0.9), rgba(124, 134, 255, 0.2));
+  animation: startup-loader 1.15s ease-in-out infinite;
+}
+
+.startup-splash-error {
+  max-width: 100%;
+  padding: 9px 11px;
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  border-radius: 12px;
+  color: rgba(254, 243, 199, 0.88);
+  background: rgba(251, 191, 36, 0.08);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+@keyframes startup-loader {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(260%); }
 }
 
 .confirm-backdrop {

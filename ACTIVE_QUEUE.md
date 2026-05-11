@@ -338,10 +338,10 @@ Notes:
 
 ### T012 — Add glass startup splash overlay
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: partial
+Claimed by: pi
+Started: 2026-05-11 15:50
+Last update: 2026-05-11 15:55
 Scope:
 - Show glass overlay with centered GPi logo while app initializes.
 - Hide after workspace and core initial async checks are usable.
@@ -362,7 +362,9 @@ Risk: medium
 Depends on:
 - none
 Notes:
-- Should be a renderer overlay, not a separate native splash window initially.
+- Renderer splash overlay implemented with `GPiIcon.svg` asset.
+- App icon assets wired for packaged resources and Windows packager icon.
+- Remaining validation: package/install launch check.
 
 ### T013 — Implement Linux portable package and tarball
 

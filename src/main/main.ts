@@ -25,6 +25,7 @@ const LEGACY_PI_PACKAGE_NAME = "@mariozechner/pi-coding-agent";
 const PI_PACKAGE_NAMES: readonly string[] = [PRIMARY_PI_PACKAGE_NAME, LEGACY_PI_PACKAGE_NAME];
 const GPI_RELEASES_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/latest";
 const GPI_RELEASE_BY_TAG_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/tags/";
+const GPI_APP_ICON_PATH = app.isPackaged ? join(process.resourcesPath, "assets", "gpi-logo.png") : resolve(currentDir, "../../resources/assets/gpi-logo.png");
 
 void bridge.prewarm().then((snapshot) => {
   if (snapshot.status === "ready") {
@@ -47,6 +48,7 @@ async function createMainWindow(): Promise<void> {
     title: "GPi",
     frame: false,
     autoHideMenuBar: true,
+    icon: GPI_APP_ICON_PATH,
     webPreferences: {
       preload: join(currentDir, "../preload/preload.cjs"),
       contextIsolation: true,

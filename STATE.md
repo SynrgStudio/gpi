@@ -37,7 +37,7 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 ## Next recommended step
 
-Continue with T005 — Add safe project file listing API.
+Validate packaged app icon/splash behavior locally, then continue with T005 — Add safe project file listing API.
 
 ## Log
 
@@ -79,3 +79,11 @@ Continue with T005 — Add safe project file listing API.
 - Saved release metadata beside downloaded installers for offline post-update display.
 - Replaced hardcoded modal notes with release body/local metadata rendering.
 - Validation: `npm run check`.
+
+### 2026-05-11 15:55 — splash/icon partial
+
+- Added renderer splash overlay using `GPiIcon.svg`.
+- Added packaged app icon assets from `GPiLogo.png`.
+- Added settings update indicator dot.
+- Validation: `npm run check`.
+- Remaining: package/install validation for Windows icon and splash.

@@ -24,6 +24,30 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.8] - 2026-05-11
+
+### Added
+
+- Added a settings update indicator dot showing up-to-date, update available, stale, or unknown status.
+- Added a glass startup splash screen using the GPi icon asset.
+- Added packaged GPi logo assets for app/taskbar/start-menu icon usage.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- Fixed continuity onboarding reopening every dev launch after installed skills are already current or the user closes it manually.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.7] - 2026-05-11
 
 ### Added

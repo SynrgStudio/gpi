@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import gpiIconUrl from "../assets/gpi-icon.svg";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
 import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
@@ -313,6 +314,9 @@ export function App() {
   const [workflowInstallStatus, setWorkflowInstallStatus] = useState<string | undefined>();
   const [updateStatus, setUpdateStatus] = useState<GpiUpdateStatus | undefined>();
   const [updateStatusLoading, setUpdateStatusLoading] = useState(false);
+  const [startupMinElapsed, setStartupMinElapsed] = useState(false);
+  const [updateStatusChecked, setUpdateStatusChecked] = useState(false);
+  const [workflowStatusChecked, setWorkflowStatusChecked] = useState(false);
   const [piUpdateRunning, setPiUpdateRunning] = useState(false);
   const [piUpdateMessage, setPiUpdateMessage] = useState<string | undefined>();
   const [gpiUpdateInstallerPath, setGpiUpdateInstallerPath] = useState<string | undefined>();
@@ -346,6 +350,7 @@ export function App() {
   const selectedSessionCompacting = Boolean(selectedCompactionOptions?.isCompacting);
   const selectedSessionBusy = selectedSession ? (activeStatuses.has(selectedSession.status) || selectedSessionCompacting) && Boolean(selectedBackendHandle) : false;
   const selectedModelOptions = selectedBackendHandle ? modelOptionsByHandle[selectedBackendHandle] : undefined;
+  const startupReady = workspaceLoaded && startupMinElapsed && updateStatusChecked && workflowStatusChecked;
 
   useEffect(() => {
     if (!window.gpi) return;
@@ -368,6 +373,19 @@ export function App() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const minTimer = window.setTimeout(() => setStartupMinElapsed(true), 700);
+    const maxTimer = window.setTimeout(() => {
+      setStartupMinElapsed(true);
+      setUpdateStatusChecked(true);
+      setWorkflowStatusChecked(true);
+    }, 5_000);
+    return () => {
+      window.clearTimeout(minTimer);
+      window.clearTimeout(maxTimer);
     };
   }, []);
 
@@ -541,17 +559,23 @@ export function App() {
   }, [nextAttentionSession]);
 
   async function refreshWorkflowSkillsStatus(openIfNeeded: boolean): Promise<void> {
-    if (!window.gpi) return;
+    if (!window.gpi) {
+      setWorkflowStatusChecked(true);
+      return;
+    }
     try {
       const status = await window.gpi.getWorkflowSkillsStatus();
       setWorkflowSkillsStatus(status);
-      if (openIfNeeded && !planModeOnboardingSeen()) {
+      if (openIfNeeded && workflowSkillsInstalled(status)) markPlanModeOnboardingSeen();
+      if (openIfNeeded && !workflowSkillsInstalled(status) && !planModeOnboardingSeen()) {
         setWorkflowOnboardingStep("intro");
         setWorkflowOnboardingOpen(true);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBridgeError(`Workflow skills unavailable: ${message}`);
+    } finally {
+      setWorkflowStatusChecked(true);
     }
   }
 
@@ -562,7 +586,10 @@ export function App() {
   }
 
   async function refreshUpdateStatus(clearUpdateMessage = true): Promise<void> {
-    if (!window.gpi) return;
+    if (!window.gpi) {
+      setUpdateStatusChecked(true);
+      return;
+    }
     setUpdateStatusLoading(true);
     if (clearUpdateMessage) {
       setPiUpdateMessage(undefined);
@@ -591,6 +618,7 @@ export function App() {
       });
     } finally {
       setUpdateStatusLoading(false);
+      setUpdateStatusChecked(true);
     }
   }
 
@@ -812,7 +840,7 @@ export function App() {
   }
 
   function workflowSkillsReady(): boolean {
-    return Boolean(workflowSkillsStatus && workflowSkillsStatus.skills.every((skill) => skill.status === "installed"));
+    return Boolean(workflowSkillsStatus && workflowSkillsInstalled(workflowSkillsStatus));
   }
 
   function hasContinuityWorkStarted(): boolean {
@@ -1328,7 +1356,7 @@ export function App() {
             </div>
             <h1>{selectedSession?.title ?? "No session"}</h1>
           </div>
-          <WindowControls onOpenSettings={() => setSettingsOpen(true)} />
+          <WindowControls updateStatus={updateStatus} updateStatusLoading={updateStatusLoading} onOpenSettings={() => setSettingsOpen(true)} />
         </header>
 
         <MessageTimeline
@@ -1421,7 +1449,10 @@ export function App() {
           preview={workflowSkillPreview}
           status={workflowSkillsStatus}
           step={workflowOnboardingStep}
-          onClose={() => setWorkflowOnboardingOpen(false)}
+          onClose={() => {
+            markPlanModeOnboardingSeen();
+            setWorkflowOnboardingOpen(false);
+          }}
           onInstall={() => void installWorkflowSkills()}
           onPreview={(skillName) => void previewWorkflowSkill(skillName)}
           onClosePreview={() => setWorkflowSkillPreview(undefined)}
@@ -1437,6 +1468,8 @@ export function App() {
           }}
         />
       ) : null}
+
+      {!startupReady ? <StartupSplash error={bridgeError} workspaceLoaded={workspaceLoaded} updateStatusChecked={updateStatusChecked} workflowStatusChecked={workflowStatusChecked} /> : null}
 
       {quickSwitcherOpen ? (
         <QuickSwitcher
@@ -1509,6 +1542,34 @@ function RevertPreviewDialog(props: { preview: RevertPreviewState; onApply: () =
 
 function groupSnapshotFiles(files: TurnSnapshotManifest["files"]): Array<{ status: string; files: TurnSnapshotManifest["files"] }> {
   return ["modified", "created", "deleted"].map((status) => ({ status, files: files.filter((file) => file.status === status) })).filter((group) => group.files.length > 0);
+}
+
+function StartupSplash(props: { error: string | undefined; workspaceLoaded: boolean; updateStatusChecked: boolean; workflowStatusChecked: boolean }) {
+  const phase = startupSplashPhase(props);
+  return (
+    <div className="startup-splash" aria-live="polite">
+      <div className="startup-splash-card">
+        <div className="startup-splash-mark">
+          <img alt="GPi" src={gpiIconUrl} />
+        </div>
+        <div className="startup-splash-copy">
+          <span>GPi</span>
+          <strong>Glass cockpit for Pi</strong>
+          <small>{phase}</small>
+        </div>
+        <div className="startup-splash-loader" aria-hidden="true"><span /></div>
+        {props.error ? <div className="startup-splash-error">{props.error}</div> : null}
+      </div>
+    </div>
+  );
+}
+
+function startupSplashPhase(props: { error: string | undefined; workspaceLoaded: boolean; updateStatusChecked: boolean; workflowStatusChecked: boolean }): string {
+  if (props.error) return "Startup warning";
+  if (!props.workspaceLoaded) return "Loading workspace...";
+  if (!props.workflowStatusChecked) return "Checking continuity skills...";
+  if (!props.updateStatusChecked) return "Checking updates...";
+  return "Ready";
 }
 
 type PiInstallTab = "curl" | "npm" | "pnpm" | "bun";
@@ -2364,12 +2425,14 @@ function SettingsIcon() {
   );
 }
 
-function WindowControls(props: { hideSettings?: boolean; onOpenSettings?: () => void }) {
+function WindowControls(props: { hideSettings?: boolean; updateStatus?: GpiUpdateStatus; updateStatusLoading?: boolean; onOpenSettings?: () => void }) {
+  const indicator = updateIndicator(props.updateStatus, Boolean(props.updateStatusLoading));
   return (
     <div className="window-controls">
       {props.hideSettings ? null : (
-        <button aria-label="Open settings" onClick={props.onOpenSettings} title="Settings" type="button">
+        <button aria-label="Open settings" className="settings-window-button" onClick={props.onOpenSettings} title={`Settings · ${indicator.title}`} type="button">
           <SettingsIcon />
+          <span aria-hidden="true" className={`settings-update-dot tone-${indicator.tone}`} />
         </button>
       )}
       <button aria-label="Minimize" onClick={() => void window.gpi?.minimizeWindow()} title="Minimize" type="button"><span className="window-control-minimize" /></button>
@@ -2377,6 +2440,36 @@ function WindowControls(props: { hideSettings?: boolean; onOpenSettings?: () => 
       <button aria-label="Close" className="close" onClick={() => void window.gpi?.closeWindow()} title="Close" type="button"><span className="window-control-close" /></button>
     </div>
   );
+}
+
+type UpdateIndicatorTone = "major" | "minor" | "ok" | "unknown";
+
+function updateIndicator(status: GpiUpdateStatus | undefined, loading: boolean): { title: string; tone: UpdateIndicatorTone } {
+  if (loading && !status) return { title: "Checking updates", tone: "unknown" };
+  if (!status || status.appVersion === "unknown") return { title: "Update status unavailable", tone: "unknown" };
+  if (status.appUpdateAvailable) {
+    const latest = status.latestAppVersion ?? "newer version";
+    const appDistance = semverDistance(status.appVersion, latest);
+    const tone: UpdateIndicatorTone = appDistance === undefined || appDistance > 1 ? "major" : "minor";
+    return { title: `GPi ${latest} available, installed ${status.appVersion}`, tone };
+  }
+  if (status.piUpdateAvailable) return { title: `Pi update available, installed ${status.installedPiVersion ?? "unknown"}`, tone: "minor" };
+  if (status.appUpdateAvailable === undefined || status.piUpdateAvailable === undefined) return { title: "Update status partially unavailable", tone: "unknown" };
+  return { title: "GPi and Pi are up to date", tone: "ok" };
+}
+
+function semverDistance(current: string, latest: string): number | undefined {
+  const currentParts = parseSemverParts(current);
+  const latestParts = parseSemverParts(latest);
+  if (!currentParts || !latestParts) return undefined;
+  if (currentParts.major !== latestParts.major || currentParts.minor !== latestParts.minor) return Number.POSITIVE_INFINITY;
+  return Math.max(0, latestParts.patch - currentParts.patch);
+}
+
+function parseSemverParts(version: string): { major: number; minor: number; patch: number } | undefined {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) return undefined;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
 }
 
 function PanelIcon() {
@@ -3595,6 +3688,10 @@ function summarizeWorkDetail(detail: string): string {
 
 function StatusBadge(props: { status: SessionStatus }) {
   return <span className={`status-badge ${props.status}`}>{statusLabels[props.status]}</span>;
+}
+
+function workflowSkillsInstalled(status: WorkflowSkillsStatus): boolean {
+  return status.skills.every((skill) => skill.status === "installed");
 }
 
 function planModeOnboardingSeen(): boolean {
