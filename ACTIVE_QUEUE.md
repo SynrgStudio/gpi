@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-10 16:45
+updated_at: 2026-05-11 23:45
 planned_at: 2026-05-10 16:45
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
@@ -80,12 +80,10 @@ Notes:
 
 ### T003 — Validate and harden GPi updater download/install flow
 
-Status: blocked
-Claimed by:
-Started:
-Last update: 2026-05-10 16:50
-Blocker:
-- Requires a future newer release to validate updater end-to-end from an installed older version.
+Status: done
+Claimed by: user/manual validation
+Started: 2026-05-10 16:50
+Last update: 2026-05-11 23:10
 Scope:
 - Validate installed app detects newer GPi release.
 - Validate Update GPi downloads installer inside app.
@@ -109,7 +107,7 @@ Risk: medium
 Depends on:
 - future release available
 Notes:
-- Continue with T004 now.
+- User confirmed updater flow is working.
 
 ### T004 — Replace hardcoded post-update notes with release-backed notes
 
@@ -145,10 +143,10 @@ Notes:
 
 ### T005 — Add safe project file listing API
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-11 23:10
+Last update: 2026-05-11 23:20
 Scope:
 - Add main-process API to list files for selected project safely.
 - Exclude heavy/irrelevant directories (`node_modules`, `.git`, `dist`, `dist-test`, `release`, `.gpi-package`, caches).
@@ -171,13 +169,14 @@ Depends on:
 - none
 Notes:
 - Foundation for filetree and @ mentions.
+- Added bounded `gpi:list-project-files` IPC/preload API with depth/entry limits and heavy directory exclusions.
 
 ### T006 — Render read-only project file tree
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-11 23:30
+Last update: 2026-05-11 23:45
 Scope:
 - Add UI surface for selected project file tree.
 - Render directories/files read-only.
@@ -197,14 +196,14 @@ Risk: medium
 Depends on:
 - T005
 Notes:
-- Exact placement can be right/inspector/sidebar depending existing layout constraints.
+- Rendered right-side read-only project files panel with refresh/loading/error/truncated states.
 
 ### T007 — Click file tree item to insert @ mention
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-11 23:30
+Last update: 2026-05-11 23:45
 Scope:
 - Wire file click to insert `@project/relative/path` or `@path` into composer.
 - Preserve cursor position when possible.
@@ -223,14 +222,14 @@ Risk: medium
 Depends on:
 - T006
 Notes:
-- Keep mention syntax simple before adding autocomplete.
+- Clicking a file in the project files panel appends `@path` to the selected session draft.
 
 ### T008 — Add @ mention autocomplete/fuzzy search
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-11 23:30
+Last update: 2026-05-11 23:45
 Scope:
 - Detect active `@` token in composer.
 - Show fuzzy file suggestions from project file list.
@@ -251,14 +250,14 @@ Risk: high
 Depends on:
 - T005
 Notes:
-- Use existing configurable keybinding style; avoid hardcoded global key checks where possible.
+- Composer detects active `@` token, filters project file suggestions, supports arrow navigation, Enter selection, Escape close, and mouse selection.
 
 ### T009 — Send mentioned file context to Pi
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-11 23:30
+Last update: 2026-05-11 23:45
 Scope:
 - Parse mentioned file paths before send.
 - Validate paths are within selected project.
@@ -278,7 +277,7 @@ Risk: medium
 Depends on:
 - T008
 Notes:
-- Do not inline large file contents initially; send paths/references first unless product decision changes.
+- Mentioned files are parsed from the draft, validated against project file list, and sent to Pi as a `[GPi Mentioned Project Files]` prompt context prefix. File contents are not inlined.
 
 ### T010 — Add Windows Open in GPi context-menu installer option
 
@@ -338,10 +337,10 @@ Notes:
 
 ### T012 — Add glass startup splash overlay
 
-Status: partial
+Status: done
 Claimed by: pi
 Started: 2026-05-11 15:50
-Last update: 2026-05-11 15:55
+Last update: 2026-05-11 23:10
 Scope:
 - Show glass overlay with centered GPi logo while app initializes.
 - Hide after workspace and core initial async checks are usable.
@@ -364,7 +363,7 @@ Depends on:
 Notes:
 - Renderer splash overlay implemented with `GPiIcon.svg` asset.
 - App icon assets wired for packaged resources and Windows packager icon.
-- Remaining validation: package/install launch check.
+- User confirmed startup splash/icon behavior is working.
 
 ### T013 — Implement Linux portable package and tarball
 

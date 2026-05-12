@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-10 16:45
+updated_at: 2026-05-11 23:45
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
 ---
@@ -10,11 +10,11 @@ goal: Complete GPi roadmap items for file mentions, project file tree, Windows O
 
 ## Current status
 
-T001 and T002 are done by user/manual validation. T003 is blocked until a future release exists for end-to-end updater validation. T004 is done: release workflow enforces changelog-backed notes and post-update modal reads release metadata instead of hardcoded notes.
+T001 through T009 and T012 are done. File listing, read-only file panel, click-to-mention, autocomplete, and mention prompt context are implemented. Next executable task is T010 Windows Open in GPi context-menu installer option.
 
 ## Last checkpoint
 
-2026-05-10 17:10 — Completed release-backed post-update notes.
+2026-05-11 23:45 — Completed T006-T009 file mentions flow.
 
 ## Active continuity session
 
@@ -33,11 +33,10 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 - Windows context menu tasks require local installer/manual validation.
 - Linux packaging tasks require Linux runner/host validation.
-- GPi updater install flow needs installed-app end-to-end validation.
 
 ## Next recommended step
 
-Validate packaged app icon/splash behavior locally, then continue with T005 — Add safe project file listing API.
+Manual validation: browse project files, click a file to insert `@path`, type `@` for autocomplete, send a prompt and confirm Pi receives mentioned file paths. Then continue with T010 if accepted.
 
 ## Log
 
@@ -87,3 +86,25 @@ Validate packaged app icon/splash behavior locally, then continue with T005 — 
 - Added settings update indicator dot.
 - Validation: `npm run check`.
 - Remaining: package/install validation for Windows icon and splash.
+
+### 2026-05-11 23:10 — start-cont T005
+
+- User confirmed T003 updater validation and T012 splash/icon are working; marked both done.
+- Claimed T005 to implement safe project file listing API.
+
+### 2026-05-11 23:20 — T005 done
+
+- Added domain types for project file entries/listing.
+- Added `gpi:list-project-files` main IPC handler.
+- Added bounded traversal with max depth, max entries, symlink skipping, project-relative paths, and heavy directory exclusions.
+- Exposed API through preload and renderer typings.
+- Updated changelog.
+- Validation: `npm run check`.
+
+### 2026-05-11 23:45 — T006-T009 done
+
+- Added right-side read-only project files panel with loading/error/truncated states and refresh.
+- Clicking a file inserts `@path` into the selected session draft.
+- Composer detects active `@` tokens and shows fuzzy file suggestions with keyboard/mouse selection.
+- Mentioned file paths are validated against the project file list and sent to Pi as prompt context under `[GPi Mentioned Project Files]`.
+- Validation: `npm run check`.
