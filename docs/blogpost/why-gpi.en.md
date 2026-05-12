@@ -17,7 +17,7 @@ draft: false
 
 > “I can't tell you how many projects I had that I went really hard on for a month, got to a pretty good state, then had to go do something else, came back to it, and had no idea what the fuck was going on anymore.”
 >
-> — [Theo](https://youtu.be/lNVa33qUzZ8?t=701), describing a problem that is not really about AI. It is about continuity.
+> — [Theo](https://youtu.be/lNVa33qUzZ8?t=701), describing a problem that is not really about programming. It is about continuity.
 
 After using coding agents every day, I started noticing something strange.
 
