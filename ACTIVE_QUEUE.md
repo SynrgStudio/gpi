@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-12 04:40
+updated_at: 2026-05-12 05:35
 planned_at: 2026-05-10 16:45
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
@@ -832,3 +832,136 @@ Notes:
 - Validation: `npm run check`; `npm run test:unit`.
 Next:
 - Manual validation by simulating missing Pi and attempting Pi session creation.
+
+### T028 — Add read-only project context API
+
+Status: partial
+Claimed by: pi
+Started: 2026-05-12 05:15
+Last update: 2026-05-12 05:35
+Scope:
+- Add a main-process API to collect read-only project context for the selected project.
+- Detect whether the project is inside a git work tree.
+- Collect git branch, detached HEAD state, upstream, ahead/behind counts, staged/modified/deleted/untracked/conflicted counts, clean/dirty status, and last commit summary.
+- Detect context files: `AGENTS.md`, `README.md`/`README.*`, and `.pi/settings.json`.
+- Return recoverable errors instead of throwing for missing git, non-git folders, or invalid project paths.
+DoD:
+- Renderer can request a bounded project context object for the selected project.
+- Git detection is read-only and never mutates repository state.
+- Non-git projects return `isRepo: false` with no fatal UI error.
+- Context file detection is path-contained to the project root.
+Validation:
+- npm run check
+- manual: project with git, project without git, dirty repo, missing context files
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+Risk: medium
+Depends on:
+- none
+Notes:
+- Use a placeholder status dot in the UI at first; user plans to provide the original Git diamond SVG later.
+- Suggested commands: `git rev-parse --is-inside-work-tree`, `git status --porcelain=v1 --branch`, `git log -1 --pretty=format:%h%x00%s%x00%an%x00%ct`.
+- Implemented `gpi:get-project-context` IPC/preload API with git status and context-file detection.
+- Validation: `npm run check`.
+Next:
+- Manual validation in git/no-git/dirty projects.
+
+### T029 — Render git status badge in the session header
+
+Status: partial
+Claimed by: pi
+Started: 2026-05-12 05:20
+Last update: 2026-05-12 05:35
+Scope:
+- Add a compact project-context badge in the chat/session header next to the session title area.
+- Use a colored placeholder dot for now; leave structure ready to swap in the original Git diamond SVG.
+- Encode status colors for no git, clean, dirty, ahead/behind, conflicted/error, and detached states.
+- Refresh context when selected project changes and expose a manual refresh action in the popover.
+DoD:
+- Header shows current project git state without using composer/inputbox space.
+- Badge is visually aligned with the existing GPi header style.
+- Badge remains useful when there is no selected session but a project is selected.
+- No-git state is visible but not alarming.
+Validation:
+- npm run check
+- manual: switch projects, dirty/clean repo states, no-git folder
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T028
+Notes:
+- Header placement is intentional: git status belongs to the active project/session context, not the composer.
+- Added session-header badge with placeholder colored dot and git branch/sync/dirty label.
+- Validation: `npm run check`.
+Next:
+- Manual visual validation and future Git diamond SVG swap.
+
+### T030 — Add project context hover/click popover
+
+Status: partial
+Claimed by: pi
+Started: 2026-05-12 05:25
+Last update: 2026-05-12 05:35
+Scope:
+- Add a GPi-styled popover anchored to the project-context badge.
+- Show git branch, repo state, ahead/behind, upstream, staged/modified/deleted/untracked/conflicted counts, last commit, and context-file presence.
+- Support hover preview and click-toggle/pin so the panel does not disappear while reading.
+- Include `Refresh` action.
+DoD:
+- Popover presents the full git/context summary compactly.
+- User can inspect the panel without moving focus to the composer.
+- Missing git/context files are communicated clearly without scary errors.
+Validation:
+- npm run check
+- manual: hover, click-toggle, refresh, outside click/Esc close
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T029
+Notes:
+- Visual reference: account/rate-limit style popover, but adapted to GPi glass surfaces.
+- Added hover/click popover with refresh action, git summary, working-tree counts, last commit, and context files.
+- Validation: `npm run check`.
+Next:
+- Manual hover/click/outside/Esc validation.
+
+### T031 — Add project context recovery and polish pass
+
+Status: partial
+Claimed by: pi
+Started: 2026-05-12 05:30
+Last update: 2026-05-12 05:35
+Scope:
+- Add concise diagnostics for git command failures, invalid project paths, detached HEAD, conflicts, missing upstream, and no git repository.
+- Ensure status copy avoids internal implementation terms.
+- Add changelog entry for project context surface.
+- Replace placeholder dot with original Git diamond SVG if user provides the asset before implementation; otherwise keep dot and leave asset swap note.
+DoD:
+- Project context surface is understandable in clean, dirty, no-git, detached, conflicted, and error states.
+- Changelog documents the feature.
+- Placeholder/SVG swap is isolated to a small component/style block.
+Validation:
+- npm run check
+- manual: inspect all practical states available locally
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+- CHANGELOG.md
+Risk: medium
+Depends on:
+- T030
+Notes:
+- This task completes T017's project context surface subset. Broader recovery cards can continue under T017 or future tasks.
+- Added no-git/error/detached/conflict-aware badge tones and popover warnings.
+- Split sync divergence and detached HEAD colors: blue for ahead/behind, violet for detached.
+- Added changelog entry.
+- Validation: `npm run check`.
+Next:
+- Manual inspection of available git states and SVG asset swap if provided.

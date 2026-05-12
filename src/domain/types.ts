@@ -67,6 +67,45 @@ export interface GpiProjectFileListing {
   excludedDirectories: string[];
 }
 
+export interface GpiProjectContextFileStatus {
+  agentsMd: boolean;
+  readme: boolean;
+  readmePath: string | undefined;
+  piSettings: boolean;
+}
+
+export interface GpiProjectGitLastCommit {
+  hash: string;
+  message: string;
+  author: string;
+  timestamp: number;
+}
+
+export interface GpiProjectGitStatus {
+  isRepo: boolean;
+  branch: string | undefined;
+  detached: boolean;
+  upstream: string | undefined;
+  ahead: number;
+  behind: number;
+  staged: number;
+  modified: number;
+  deleted: number;
+  untracked: number;
+  conflicted: number;
+  clean: boolean;
+  lastCommit: GpiProjectGitLastCommit | undefined;
+  error: string | undefined;
+}
+
+export interface GpiProjectContext {
+  projectId: string;
+  projectPath: string;
+  git: GpiProjectGitStatus;
+  files: GpiProjectContextFileStatus;
+  checkedAt: number;
+}
+
 export interface GpiImageAttachment {
   id: string;
   name: string;

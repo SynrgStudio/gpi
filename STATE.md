@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-12 04:40
+updated_at: 2026-05-12 05:35
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
 ---
@@ -38,7 +38,7 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 ## Next recommended step
 
-Manual validation: simulate missing Pi and attempt Pi session creation; validate Pi install in sandbox; optionally validate `pi update` on a machine where updating global Pi is acceptable. Next implementation area after validation: T010 Windows context menu.
+Manual validation: inspect the new session-header project context badge/popover in clean, dirty, no-git, and conflicted/detached states if practical. Swap placeholder dot to the original Git diamond SVG when asset is available.
 
 ## Log
 
@@ -165,3 +165,24 @@ Manual validation: simulate missing Pi and attempt Pi session creation; validate
 - Legacy persisted local sessions are filtered during workspace hydration.
 - Validation: `npm run check`; `npm run test:unit`.
 - Pending manual validation: sandbox Install Pi, simulate missing Pi, and optionally validate `pi update`.
+
+### 2026-05-12 05:05 — plan-cont project context surface
+
+- Added T028-T031 for the session-header git/project context surface.
+- Planned read-only project context API for git status, branch, upstream, ahead/behind, working tree counts, last commit, and context-file detection.
+- Planned header placement beside the session title/context area, not the composer input.
+- Planned placeholder colored dot first, with structure ready to swap to the original Git diamond SVG when user provides asset.
+- Planned hover/click popover with GPi styling and refresh action.
+- No implementation performed.
+
+### 2026-05-12 05:35 — start-cont T028-T031 project context surface
+
+- Added `gpi:get-project-context` read-only IPC/preload API.
+- Added git status detection: repo/no repo, branch/detached, upstream, ahead/behind, staged/modified/deleted/untracked/conflicted counts, clean state, last commit.
+- Added context file detection for `AGENTS.md`, `README*`, and `.pi/settings.json`.
+- Added session-header project context badge using a placeholder colored dot prepared for future Git diamond SVG replacement.
+- Split badge colors so ahead/behind uses blue and detached HEAD uses violet.
+- Added hover/click project context popover with Refresh action, git summary, counts, last commit, and context files.
+- Added changelog entry.
+- Validation: `npm run check`.
+- T028-T031 remain partial pending user manual UI/state validation.

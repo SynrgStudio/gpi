@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiProjectGitLastCommit, GpiProjectGitStatus, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -111,6 +111,7 @@ function registerIpc(window: BrowserWindow): void {
     return workerRuntimeManager.listSessions(projectPath);
   });
   ipcMain.handle("gpi:list-project-files", async (_event, projectId: unknown) => listProjectFiles(requireString(projectId, "projectId")));
+  ipcMain.handle("gpi:get-project-context", async (_event, projectId: unknown) => getProjectContext(requireString(projectId, "projectId")));
   ipcMain.handle("gpi:choose-image-attachments", async () => chooseImageAttachments(window));
   ipcMain.handle("gpi:ingest-image-attachment", async (_event, input: unknown) => ingestImageAttachment(requireImageAttachmentInput(input)));
 
@@ -307,6 +308,143 @@ function imageMimeTypeFromPath(path: string): string {
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".gif")) return "image/gif";
   return "application/octet-stream";
+}
+
+async function getProjectContext(projectId: string): Promise<GpiProjectContext> {
+  const projectPath = await resolveProjectPath(projectId);
+  const [git, files] = await Promise.all([getProjectGitStatus(projectPath), getProjectContextFiles(projectPath)]);
+  return { projectId, projectPath, git, files, checkedAt: Date.now() };
+}
+
+async function getProjectContextFiles(projectPath: string): Promise<GpiProjectContext["files"]> {
+  const readmePath = await findReadmePath(projectPath);
+  return {
+    agentsMd: await pathExists(join(projectPath, "AGENTS.md")),
+    readme: readmePath !== undefined,
+    readmePath,
+    piSettings: await pathExists(join(projectPath, ".pi", "settings.json")),
+  };
+}
+
+async function findReadmePath(projectPath: string): Promise<string | undefined> {
+  const entries = await readdir(projectPath, { withFileTypes: true }).catch(() => []);
+  const readme = entries.find((entry) => entry.isFile() && /^readme(?:\.|$)/i.test(entry.name));
+  return readme ? readme.name : undefined;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function getProjectGitStatus(projectPath: string): Promise<GpiProjectGitStatus> {
+  const base: GpiProjectGitStatus = {
+    isRepo: false,
+    branch: undefined,
+    detached: false,
+    upstream: undefined,
+    ahead: 0,
+    behind: 0,
+    staged: 0,
+    modified: 0,
+    deleted: 0,
+    untracked: 0,
+    conflicted: 0,
+    clean: true,
+    lastCommit: undefined,
+    error: undefined,
+  };
+
+  const inside = await runGitCommand(projectPath, ["rev-parse", "--is-inside-work-tree"], 8_000).catch((error: unknown) => commandErrorText(error));
+  if ("message" in inside) return { ...base, error: inside.message.includes("ENOENT") ? "Git executable not found." : undefined };
+  if (inside.stdout.trim() !== "true") return base;
+
+  const [statusResult, branchResult, commitResult] = await Promise.all([
+    runGitCommand(projectPath, ["status", "--porcelain=v1", "--branch"], 8_000).catch((error: unknown) => commandErrorText(error)),
+    runGitCommand(projectPath, ["branch", "--show-current"], 8_000).catch(() => ({ stdout: "", stderr: "" })),
+    runGitCommand(projectPath, ["log", "-1", "--pretty=format:%h%x00%s%x00%an%x00%ct"], 8_000).catch(() => ({ stdout: "", stderr: "" })),
+  ]);
+
+  if ("message" in statusResult) return { ...base, isRepo: true, error: statusResult.message };
+  const parsed = parseGitPorcelainStatus(statusResult.stdout);
+  const branch = branchResult.stdout.trim() || parsed.branch;
+  return {
+    ...parsed,
+    isRepo: true,
+    branch,
+    detached: parsed.detached || !branch,
+    lastCommit: parseGitLastCommit(commitResult.stdout),
+    error: undefined,
+  };
+}
+
+function parseGitPorcelainStatus(output: string): GpiProjectGitStatus {
+  const status: GpiProjectGitStatus = {
+    isRepo: true,
+    branch: undefined,
+    detached: false,
+    upstream: undefined,
+    ahead: 0,
+    behind: 0,
+    staged: 0,
+    modified: 0,
+    deleted: 0,
+    untracked: 0,
+    conflicted: 0,
+    clean: true,
+    lastCommit: undefined,
+    error: undefined,
+  };
+
+  for (const line of output.split(/\r?\n/).filter(Boolean)) {
+    if (line.startsWith("## ")) {
+      parseGitBranchLine(line.slice(3), status);
+      continue;
+    }
+    const index = line[0] ?? " ";
+    const worktree = line[1] ?? " ";
+    if (line.startsWith("??")) status.untracked += 1;
+    else {
+      if (index === "U" || worktree === "U" || (index === "A" && worktree === "A") || (index === "D" && worktree === "D")) status.conflicted += 1;
+      if (index !== " " && index !== "?") status.staged += 1;
+      if (worktree === "M") status.modified += 1;
+      if (worktree === "D") status.deleted += 1;
+    }
+  }
+  status.clean = status.staged === 0 && status.modified === 0 && status.deleted === 0 && status.untracked === 0 && status.conflicted === 0;
+  return status;
+}
+
+function parseGitBranchLine(line: string, status: GpiProjectGitStatus): void {
+  const [branchPart, trackingPart] = line.split("...");
+  status.detached = branchPart?.startsWith("HEAD ") ?? false;
+  status.branch = status.detached ? branchPart?.replace(/^HEAD \(no branch\)/, "detached") : branchPart;
+  if (!trackingPart) return;
+  const [upstream, aheadBehind] = trackingPart.split(" [");
+  status.upstream = upstream;
+  const detail = aheadBehind?.replace(/\]$/, "") ?? "";
+  const ahead = detail.match(/ahead (\d+)/)?.[1];
+  const behind = detail.match(/behind (\d+)/)?.[1];
+  status.ahead = ahead ? Number.parseInt(ahead, 10) : 0;
+  status.behind = behind ? Number.parseInt(behind, 10) : 0;
+}
+
+function parseGitLastCommit(output: string): GpiProjectGitLastCommit | undefined {
+  const [hash, message, author, timestamp] = output.split("\0");
+  if (!hash || !message || !author || !timestamp) return undefined;
+  return { hash, message, author, timestamp: Number.parseInt(timestamp, 10) * 1000 };
+}
+
+async function runGitCommand(cwd: string, args: string[], timeout: number): Promise<{ stdout: string; stderr: string }> {
+  const executable = await findExecutable(process.platform === "win32" ? ["git.exe", "git.cmd", "git"] : ["git"]);
+  if (process.platform === "win32" && executable.toLowerCase().endsWith(".cmd")) {
+    return execFileAsync(executable, args, { cwd, timeout, windowsHide: true, maxBuffer: 2_000_000, shell: true });
+  }
+  return execFileAsync(executable, args, { cwd, timeout, windowsHide: true, maxBuffer: 2_000_000 });
 }
 
 async function listProjectFiles(projectId: string): Promise<GpiProjectFileListing> {

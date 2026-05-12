@@ -2,8 +2,9 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import gpiIconUrl from "../assets/gpi-icon.svg";
+import gitIconUrl from "../assets/git.svg";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
-import type { ChatMessage, ContinuityWorkflowStatus, GpiImageAttachment, GpiImageAttachmentResult, GpiProject, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
+import type { ChatMessage, ContinuityWorkflowStatus, GpiImageAttachment, GpiImageAttachmentResult, GpiProject, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
   addOptimisticRealSession,
   addProjectToWorkspace,
@@ -335,6 +336,9 @@ export function App() {
   const [projectFiles, setProjectFiles] = useState<GpiProjectFileListing | undefined>();
   const [projectFilesLoading, setProjectFilesLoading] = useState(false);
   const [projectFilesError, setProjectFilesError] = useState<string | undefined>();
+  const [projectContext, setProjectContext] = useState<GpiProjectContext | undefined>();
+  const [projectContextLoading, setProjectContextLoading] = useState(false);
+  const [projectContextError, setProjectContextError] = useState<string | undefined>();
   const [updateStatus, setUpdateStatus] = useState<GpiUpdateStatus | undefined>();
   const [updateStatusLoading, setUpdateStatusLoading] = useState(false);
   const [startupMinElapsed, setStartupMinElapsed] = useState(false);
@@ -474,6 +478,15 @@ export function App() {
     return () => {
       cancelled = true;
     };
+  }, [selectedProject?.id]);
+
+  useEffect(() => {
+    refreshProjectContext();
+    if (!selectedProject) return;
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshProjectContext();
+    }, 5_000);
+    return () => window.clearInterval(interval);
   }, [selectedProject?.id]);
 
   useEffect(() => {
@@ -1121,6 +1134,19 @@ export function App() {
     }).finally(() => setProjectFilesLoading(false));
   }
 
+  function refreshProjectContext(): void {
+    if (!window.gpi || !selectedProject) {
+      setProjectContext(undefined);
+      return;
+    }
+    setProjectContextLoading(true);
+    setProjectContextError(undefined);
+    void window.gpi.getProjectContext(selectedProject.id).then(setProjectContext).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      setProjectContextError(message);
+    }).finally(() => setProjectContextLoading(false));
+  }
+
   async function changeModel(value: string): Promise<void> {
     if (!window.gpi || !selectedBackendHandle) return;
     const separatorIndex = value.indexOf("/");
@@ -1439,7 +1465,10 @@ export function App() {
               <span>{selectedProject?.name ?? "No project"}</span>
               <span className="path-chip">cwd {selectedProject?.path ?? "No path"}</span>
             </div>
-            <h1>{selectedSession?.title ?? "No session"}</h1>
+            <div className="chat-title-row">
+              <h1>{selectedSession?.title ?? "No session"}</h1>
+              <ProjectContextBadge context={projectContext} error={projectContextError} loading={projectContextLoading} onRefresh={refreshProjectContext} />
+            </div>
           </div>
           <WindowControls updateStatus={updateStatus} updateStatusLoading={updateStatusLoading} onOpenSettings={() => {
             setSettingsInitialSection("revert");
@@ -1863,6 +1892,103 @@ function PiInstallOnboardingDialog(props: { onClose: () => void }) {
       </section>
     </div>
   );
+}
+
+function ProjectContextBadge(props: { context: GpiProjectContext | undefined; error: string | undefined; loading: boolean; onRefresh: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [pinned, setPinned] = useState(false);
+  const tone = projectContextTone(props.context, props.error);
+  const label = projectContextLabel(props.context, props.error, props.loading);
+
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key !== "Escape") return;
+      setOpen(false);
+      setPinned(false);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [open]);
+
+  return (
+    <div className="project-context-anchor" onMouseEnter={() => setOpen(true)} onMouseLeave={() => { if (!pinned) setOpen(false); }}>
+      <button
+        aria-label={`Project git status: ${label}`}
+        className={`project-context-badge tone-${tone}`}
+        onClick={() => {
+          setOpen((current) => !current || !pinned);
+          setPinned((current) => !current);
+        }}
+        type="button"
+      >
+        <img alt="" className="project-context-git-icon" src={gitIconUrl} />
+      </button>
+      {open ? <ProjectContextPopover context={props.context} error={props.error} loading={props.loading} /> : null}
+    </div>
+  );
+}
+
+function ProjectContextPopover(props: { context: GpiProjectContext | undefined; error: string | undefined; loading: boolean }) {
+  const git = props.context?.git;
+  return (
+    <div className="project-context-popover">
+      <div className="project-context-popover-head">
+        <span>Project context</span>
+        <small>{props.loading ? "Updating..." : "Auto-updated"}</small>
+      </div>
+      {props.error ? <div className="project-context-warning">{props.error}</div> : null}
+      {git ? (
+        <>
+          <div className="project-context-section">
+            <strong>Git</strong>
+            <span>{git.isRepo ? `${git.branch ?? "detached"}${git.clean ? " · clean" : " · changed"}` : "No git repository"}</span>
+          </div>
+          {git.error ? <div className="project-context-warning">{git.error}</div> : null}
+          {git.isRepo ? (
+            <>
+              <div className="project-context-grid">
+                <span>Upstream</span><strong>{git.upstream ?? "Not configured"}</strong>
+                <span>Remote</span><strong>↑ {git.ahead.toString()} · ↓ {git.behind.toString()}</strong>
+                <span>Staged</span><strong>{git.staged.toString()}</strong>
+                <span>Modified</span><strong>{git.modified.toString()}</strong>
+                <span>Deleted</span><strong>{git.deleted.toString()}</strong>
+                <span>Untracked</span><strong>{git.untracked.toString()}</strong>
+                <span>Conflicts</span><strong>{git.conflicted.toString()}</strong>
+              </div>
+              {git.lastCommit ? <div className="project-context-commit"><span>{git.lastCommit.hash}</span><strong>{git.lastCommit.message}</strong><small>{git.lastCommit.author}</small></div> : null}
+            </>
+          ) : null}
+        </>
+      ) : <div className="project-context-section"><strong>Git</strong><span>{props.loading ? "Checking..." : "Not loaded"}</span></div>}
+      <div className="project-context-section project-context-files">
+        <strong>Context files</strong>
+        <span className={props.context?.files.agentsMd ? "present" : "missing"}>AGENTS.md {props.context?.files.agentsMd ? "found" : "missing"}</span>
+        <span className={props.context?.files.readme ? "present" : "missing"}>{props.context?.files.readmePath ?? "README missing"}</span>
+        <span className={props.context?.files.piSettings ? "present" : "missing"}>.pi/settings.json {props.context?.files.piSettings ? "found" : "missing"}</span>
+      </div>
+    </div>
+  );
+}
+
+function projectContextTone(context: GpiProjectContext | undefined, error: string | undefined): "clean" | "detached" | "dirty" | "error" | "missing" | "sync" {
+  if (error || context?.git.error || context?.git.conflicted) return "error";
+  if (!context || !context.git.isRepo) return "missing";
+  if (context.git.detached) return "detached";
+  if (!context.git.clean) return "dirty";
+  if (context.git.ahead > 0 || context.git.behind > 0) return "sync";
+  return "clean";
+}
+
+function projectContextLabel(context: GpiProjectContext | undefined, error: string | undefined, loading: boolean): string {
+  if (loading && !context) return "git...";
+  if (error) return "git error";
+  if (!context?.git.isRepo) return "no git";
+  const branch = context.git.branch ?? "detached";
+  if (context.git.conflicted > 0) return `${branch} !`;
+  if (!context.git.clean) return `${branch} *`;
+  if (context.git.ahead > 0 || context.git.behind > 0) return `${branch} ↑${context.git.ahead.toString()} ↓${context.git.behind.toString()}`;
+  return branch;
 }
 
 function ImagePreviewDialog(props: { image: GpiImageAttachment; onClose: () => void }) {

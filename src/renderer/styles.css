@@ -968,6 +968,8 @@ button {
 }
 
 .chat-header {
+  position: relative;
+  z-index: 80;
   display: flex;
   min-width: 0;
   min-height: 66px;
@@ -986,7 +988,7 @@ button {
   min-width: 0;
   flex: 1;
   gap: 5px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .chat-kicker {
@@ -1014,6 +1016,14 @@ button {
   color: rgba(161, 161, 170, 0.44);
 }
 
+.chat-title-row {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+}
+
 .chat-header h1 {
   overflow: hidden;
   margin: 0;
@@ -1023,6 +1033,124 @@ button {
   font-size: 15px;
   font-weight: 680;
   letter-spacing: -0.025em;
+}
+
+.project-context-anchor {
+  position: relative;
+  flex: 0 0 auto;
+  margin-bottom: -10px;
+  padding-bottom: 10px;
+}
+
+.project-context-badge {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  transform: translateY(1px);
+}
+
+.project-context-git-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  opacity: 0.92;
+}
+
+.project-context-badge.tone-clean .project-context-git-icon { filter: brightness(0) saturate(100%) invert(82%) sepia(31%) saturate(813%) hue-rotate(78deg) brightness(93%) contrast(90%) drop-shadow(0 0 5px rgba(94, 227, 138, 0.24)); }
+.project-context-badge.tone-dirty .project-context-git-icon { filter: brightness(0) saturate(100%) invert(82%) sepia(48%) saturate(674%) hue-rotate(348deg) brightness(101%) contrast(92%) drop-shadow(0 0 5px rgba(245, 199, 107, 0.26)); }
+.project-context-badge.tone-sync .project-context-git-icon { filter: brightness(0) saturate(100%) invert(69%) sepia(42%) saturate(763%) hue-rotate(196deg) brightness(101%) contrast(101%) drop-shadow(0 0 5px rgba(141, 162, 255, 0.26)); }
+.project-context-badge.tone-detached .project-context-git-icon { filter: brightness(0) saturate(100%) invert(70%) sepia(52%) saturate(2220%) hue-rotate(211deg) brightness(101%) contrast(98%) drop-shadow(0 0 5px rgba(192, 132, 252, 0.28)); }
+.project-context-badge.tone-error .project-context-git-icon { filter: brightness(0) saturate(100%) invert(59%) sepia(42%) saturate(2269%) hue-rotate(313deg) brightness(105%) contrast(101%) drop-shadow(0 0 5px rgba(255, 107, 122, 0.28)); }
+.project-context-badge.tone-missing .project-context-git-icon { filter: brightness(0) saturate(100%) invert(68%) sepia(8%) saturate(354%) hue-rotate(202deg) brightness(91%) contrast(86%); opacity: 0.62; }
+
+.project-context-popover {
+  position: absolute;
+  z-index: 120;
+  top: calc(100% + 2px);
+  left: 0;
+  display: grid;
+  width: 292px;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  background: #101013;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+}
+
+.project-context-popover-head,
+.project-context-section,
+.project-context-grid {
+  display: grid;
+  gap: 5px;
+}
+
+.project-context-popover-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  color: rgba(244, 244, 245, 0.88);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.project-context-popover-head small {
+  color: rgba(161, 161, 170, 0.64);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.project-context-section strong,
+.project-context-grid strong,
+.project-context-commit strong {
+  color: rgba(244, 244, 245, 0.86);
+  font-size: 12px;
+}
+
+.project-context-section span,
+.project-context-grid span,
+.project-context-commit span,
+.project-context-commit small {
+  min-width: 0;
+  overflow: hidden;
+  color: rgba(212, 212, 216, 0.68);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.project-context-files .missing {
+  color: rgba(161, 161, 170, 0.44);
+}
+
+.project-context-files .present {
+  color: rgba(212, 212, 216, 0.7);
+}
+
+.project-context-grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-top: 2px;
+}
+
+.project-context-commit {
+  display: grid;
+  gap: 3px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.project-context-warning {
+  padding: 8px 9px;
+  border: 1px solid rgba(245, 199, 107, 0.18);
+  border-radius: 10px;
+  color: rgba(245, 199, 107, 0.88);
+  background: rgba(245, 199, 107, 0.08);
+  font-size: 11px;
 }
 
 .header-status-grid {

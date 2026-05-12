@@ -24,6 +24,28 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.11] - 2026-05-12
+### Added
+
+- Added a session-header project context badge with git status, sync/dirty counts, last commit, and context-file presence.
+- Added the Git logo asset for the project context badge, credited to Jason Long under CC BY 3.0.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.10] - 2026-05-12
 ### Added
 

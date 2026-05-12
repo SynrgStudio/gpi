@@ -1,10 +1,32 @@
-# GPi
+<p align="center">
+  <img src="resources/assets/gpi-logo.png" alt="GPi" width="112" />
+</p>
 
-GPi is a local glass cockpit GUI for Pi.
+<h1 align="center">GPi</h1>
 
-> Pi is the engine. GPi is the beautiful cockpit for managing multiple Pi projects and sessions.
+<p align="center">
+  A local glass cockpit GUI for Pi.
+</p>
 
-Real Pi sessions are moving to WorkerPiRuntime so multiple agents can run in parallel without blocking the app.
+<p align="center">
+  <a href="https://github.com/SynrgStudio/gpi/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/SynrgStudio/gpi/ci.yml?branch=main&label=ci&style=flat-square" /></a>
+  <a href="https://github.com/SynrgStudio/gpi/releases"><img alt="Release" src="https://img.shields.io/github/v/release/SynrgStudio/gpi?style=flat-square" /></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-windows-7c86ff?style=flat-square" />
+  <img alt="Runtime" src="https://img.shields.io/badge/runtime-Pi-34d399?style=flat-square" />
+  <img alt="Status" src="https://img.shields.io/badge/status-pre--0.1-f59e0b?style=flat-square" />
+</p>
+
+<p align="center">
+  <a href="https://synrgstudio.github.io/gpi/">Docs</a>
+  ·
+  <a href="https://github.com/SynrgStudio/gpi/releases">Releases</a>
+  ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+> Pi is the engine. GPi is the cockpit for managing multiple Pi projects and sessions.
+
+GPi runs Pi sessions, keeps project context visible, and gives long-running agent work a persistent desktop shell.
 
 ## Workflow skills
 
@@ -108,6 +130,10 @@ src/
   preload/     Electron preload boundary
   renderer/    React UI shell
 ```
+
+## Credits
+
+- Git logo by [Jason Long](https://git-scm.com/downloads/logos), licensed under [Creative Commons Attribution 3.0 Unported](https://creativecommons.org/licenses/by/3.0/).
 
 ## Docs
 

@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld("gpi", {
   validateProjectPath: (projectPath: string) => ipcRenderer.invoke("gpi:validate-project-path", projectPath) as Promise<{ ok: boolean; error: string | undefined }>,
   listProjectSessions: (projectId: string) => ipcRenderer.invoke("gpi:list-project-sessions", projectId) as Promise<GpiDiscoveredSession[]>,
   listProjectFiles: (projectId: string) => ipcRenderer.invoke("gpi:list-project-files", projectId) as Promise<GpiProjectFileListing>,
+  getProjectContext: (projectId: string) => ipcRenderer.invoke("gpi:get-project-context", projectId) as Promise<GpiProjectContext>,
   chooseImageAttachments: () => ipcRenderer.invoke("gpi:choose-image-attachments") as Promise<GpiImageAttachmentResult[]>,
   ingestImageAttachment: (input: GpiImageAttachmentInput) => ipcRenderer.invoke("gpi:ingest-image-attachment", input) as Promise<GpiImageAttachmentResult>,
   getPrewarmStatus: () => ipcRenderer.invoke("gpi:get-prewarm-status") as Promise<SdkPiBridgePrewarmSnapshot>,
