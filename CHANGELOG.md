@@ -24,6 +24,32 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.10] - 2026-05-12
+### Added
+
+- Added composer image attachments with picker, paste, drag/drop, thumbnails, remove controls, and fullscreen preview.
+- Added native Pi SDK image delivery for prompts and follow-ups.
+- Added Pi runtime detection for the Pi CLI, pnpm, and npm with official install command selection.
+- Added a Runtime settings section for Pi install/update status and explicit Pi install actions.
+- Added a missing-Pi recovery path when creating Pi sessions.
+
+### Changed
+
+- Image attachments are stored under GPi user data and restored after app restart without embedding large base64 payloads in workspace JSON.
+- Removed local-session creation and user-facing "real session" terminology; GPi now presents only Pi sessions.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.9] - 2026-05-12
 ### Added
 
@@ -40,9 +66,7 @@ All notable GPi changes are documented here. Releases must move relevant entries
 ### Fixed
 
 - Fixed slow project file tree collapse/open behavior by keeping collapse state local to the panel.
-- Fixed file mention insertion latency by updating the composer locally before workspace synchroni
-
-zation.
+- Fixed file mention insertion latency by updating the composer locally before workspace synchronization.
 - Fixed project file tree refresh expanding previously collapsed directories.
 
 ### Packaging

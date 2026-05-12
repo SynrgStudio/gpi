@@ -2,7 +2,7 @@
 
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -23,6 +23,7 @@ interface GpiPreloadApi {
   getUpdateStatus(): Promise<GpiUpdateStatus>;
   getGpiReleaseNotes(version: string): Promise<GpiReleaseNotes>;
   updatePi(): Promise<GpiPiUpdateResult>;
+  installPi(force?: boolean): Promise<GpiPiInstallResult>;
   openExternal(url: string): Promise<GpiOpenExternalResult>;
   downloadGpiUpdate(url: string): Promise<GpiAppUpdateDownloadResult>;
   installGpiUpdate(installerPath: string): Promise<GpiAppUpdateInstallResult>;
@@ -39,6 +40,8 @@ interface GpiPreloadApi {
   validateProjectPath(projectPath: string): Promise<{ ok: boolean; error: string | undefined }>;
   listProjectSessions(projectId: string): Promise<GpiDiscoveredSession[]>;
   listProjectFiles(projectId: string): Promise<GpiProjectFileListing>;
+  chooseImageAttachments(): Promise<GpiImageAttachmentResult[]>;
+  ingestImageAttachment(input: GpiImageAttachmentInput): Promise<GpiImageAttachmentResult>;
   getPrewarmStatus(): Promise<SdkPiBridgePrewarmSnapshot>;
   getFileDiff(projectId: string, filePath: string): Promise<{ ok: true; diff: string; kind: "git" | "created" | "unavailable"; message: string | undefined }>;
   getModelOptions(sessionHandleId: string): Promise<GpiModelOptions>;
@@ -50,9 +53,9 @@ interface GpiPreloadApi {
   setAutoCompaction(sessionHandleId: string, enabled: boolean): Promise<GpiCompactionOptions>;
   createSession(projectId: string): Promise<GpiSessionHandleInfo>;
   openSession(sessionPath: string, projectPath: string): Promise<GpiSessionHandleInfo>;
-  prompt(sessionHandleId: string, text: string): Promise<{ ok: true }>;
-  followUp(sessionHandleId: string, text: string): Promise<{ ok: true }>;
-  steer(sessionHandleId: string, text: string): Promise<{ ok: true }>;
+  prompt(sessionHandleId: string, text: string, images?: GpiImageAttachment[]): Promise<{ ok: true }>;
+  followUp(sessionHandleId: string, text: string, images?: GpiImageAttachment[]): Promise<{ ok: true }>;
+  steer(sessionHandleId: string, text: string, images?: GpiImageAttachment[]): Promise<{ ok: true }>;
   abort(sessionHandleId: string): Promise<{ ok: true }>;
   onPiEvent(listener: (event: GpiPiEvent) => void): () => void;
 }

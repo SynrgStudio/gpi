@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -29,6 +29,8 @@ const GPI_APP_ICON_PATH = app.isPackaged ? join(process.resourcesPath, "assets",
 const PROJECT_FILE_LIST_MAX_DEPTH = 6;
 const PROJECT_FILE_LIST_MAX_ENTRIES = 2_000;
 const PROJECT_FILE_LIST_EXCLUDED_DIRECTORIES = new Set([".cache", ".git", ".gpi-package", ".next", ".turbo", ".vite", "coverage", "dist", "dist-test", "node_modules", "out", "release"]);
+const IMAGE_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const IMAGE_ATTACHMENT_SUPPORTED_MIME_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
 
 void bridge.prewarm().then((snapshot) => {
   if (snapshot.status === "ready") {
@@ -95,6 +97,7 @@ function registerIpc(window: BrowserWindow): void {
   ipcMain.handle("gpi:get-update-status", async () => getUpdateStatus());
   ipcMain.handle("gpi:get-gpi-release-notes", async (_event, version: unknown) => getGpiReleaseNotes(requireString(version, "version")));
   ipcMain.handle("gpi:update-pi", async () => updatePi());
+  ipcMain.handle("gpi:install-pi", async (_event, force: unknown) => installPi(force === undefined ? false : requireBoolean(force, "force")));
   ipcMain.handle("gpi:open-external", async (_event, url: unknown) => openExternalUrl(requireString(url, "url")));
   ipcMain.handle("gpi:download-gpi-update", async (_event, url: unknown) => downloadGpiUpdate(requireString(url, "url")));
   ipcMain.handle("gpi:install-gpi-update", async (_event, installerPath: unknown) => installGpiUpdate(requireString(installerPath, "installerPath")));
@@ -108,6 +111,8 @@ function registerIpc(window: BrowserWindow): void {
     return workerRuntimeManager.listSessions(projectPath);
   });
   ipcMain.handle("gpi:list-project-files", async (_event, projectId: unknown) => listProjectFiles(requireString(projectId, "projectId")));
+  ipcMain.handle("gpi:choose-image-attachments", async () => chooseImageAttachments(window));
+  ipcMain.handle("gpi:ingest-image-attachment", async (_event, input: unknown) => ingestImageAttachment(requireImageAttachmentInput(input)));
 
   ipcMain.handle("gpi:choose-project-path", async () => {
     const result = await dialog.showOpenDialog(window, {
@@ -205,24 +210,24 @@ function registerIpc(window: BrowserWindow): void {
     return { id: handle.id, sessionFile: handle.sessionFile };
   });
 
-  ipcMain.handle("gpi:prompt", async (_event, sessionHandleId: unknown, text: unknown) => {
+  ipcMain.handle("gpi:prompt", async (_event, sessionHandleId: unknown, text: unknown, images: unknown) => {
     const handle = sessionHandles.get(requireString(sessionHandleId, "sessionHandleId"));
     if (!handle) throw new Error(`Unknown GPi session handle: ${sessionHandleId}`);
-    await handle.prompt(requireString(text, "text"));
+    await handle.prompt(requireString(text, "text"), requireImageAttachments(images));
     return { ok: true };
   });
 
-  ipcMain.handle("gpi:follow-up", async (_event, sessionHandleId: unknown, text: unknown) => {
+  ipcMain.handle("gpi:follow-up", async (_event, sessionHandleId: unknown, text: unknown, images: unknown) => {
     const handle = sessionHandles.get(requireString(sessionHandleId, "sessionHandleId"));
     if (!handle) throw new Error(`Unknown GPi session handle: ${sessionHandleId}`);
-    await handle.followUp(requireString(text, "text"));
+    await handle.followUp(requireString(text, "text"), requireImageAttachments(images));
     return { ok: true };
   });
 
-  ipcMain.handle("gpi:steer", async (_event, sessionHandleId: unknown, text: unknown) => {
+  ipcMain.handle("gpi:steer", async (_event, sessionHandleId: unknown, text: unknown, images: unknown) => {
     const handle = sessionHandles.get(requireString(sessionHandleId, "sessionHandleId"));
     if (!handle) throw new Error(`Unknown GPi session handle: ${sessionHandleId}`);
-    await handle.steer(requireString(text, "text"));
+    await handle.steer(requireString(text, "text"), requireImageAttachments(images));
     return { ok: true };
   });
 
@@ -232,6 +237,76 @@ function registerIpc(window: BrowserWindow): void {
     await handle.abort();
     return { ok: true };
   });
+}
+
+async function chooseImageAttachments(window: BrowserWindow): Promise<GpiImageAttachmentResult[]> {
+  const result = await dialog.showOpenDialog(window, {
+    filters: [{ name: "Images", extensions: ["gif", "jpeg", "jpg", "png", "webp"] }],
+    properties: ["openFile", "multiSelections"],
+    title: "Attach images",
+  });
+  if (result.canceled) return [];
+  return Promise.all(result.filePaths.map(async (path) => {
+    try {
+      const buffer = await readFile(path);
+      const mimeType = imageMimeTypeFromPath(path);
+      return ingestImageAttachment({ name: path.split(/[\\/]/).pop() ?? "image", mimeType, data: buffer.toString("base64") });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { ok: false, error: message };
+    }
+  }));
+}
+
+async function ingestImageAttachment(input: GpiImageAttachmentInput): Promise<GpiImageAttachmentResult> {
+  if (!IMAGE_ATTACHMENT_SUPPORTED_MIME_TYPES.has(input.mimeType)) return { ok: false, error: `Unsupported image type: ${input.mimeType}` };
+  const size = Buffer.byteLength(input.data, "base64");
+  if (size <= 0) return { ok: false, error: "Image is empty" };
+  if (size > IMAGE_ATTACHMENT_MAX_BYTES) return { ok: false, error: `Image is too large. Max size is ${Math.round(IMAGE_ATTACHMENT_MAX_BYTES / 1024 / 1024).toString()}MB.` };
+  const name = input.name.trim() || "image";
+  const id = `img-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  const storagePath = await writeStoredImageAttachment(id, input.mimeType, input.data);
+  return {
+    ok: true,
+    attachment: {
+      id,
+      name,
+      mimeType: input.mimeType,
+      size,
+      data: input.data,
+      previewDataUrl: `data:${input.mimeType};base64,${input.data}`,
+      storagePath,
+    },
+  };
+}
+
+async function writeStoredImageAttachment(id: string, mimeType: string, data: string): Promise<string> {
+  const directory = imageAttachmentStorageDirectory();
+  await mkdir(directory, { recursive: true });
+  const path = join(directory, `${id}${imageExtensionForMimeType(mimeType)}`);
+  await writeFile(path, Buffer.from(data, "base64"));
+  return path;
+}
+
+function imageAttachmentStorageDirectory(): string {
+  return join(app.getPath("userData"), "attachments", "images");
+}
+
+function imageExtensionForMimeType(mimeType: string): string {
+  if (mimeType === "image/jpeg") return ".jpg";
+  if (mimeType === "image/png") return ".png";
+  if (mimeType === "image/webp") return ".webp";
+  if (mimeType === "image/gif") return ".gif";
+  return ".img";
+}
+
+function imageMimeTypeFromPath(path: string): string {
+  const lower = path.toLowerCase();
+  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".gif")) return "image/gif";
+  return "application/octet-stream";
 }
 
 async function listProjectFiles(projectId: string): Promise<GpiProjectFileListing> {
@@ -426,9 +501,10 @@ async function getUpdateStatus(): Promise<GpiUpdateStatus> {
   const appVersion = await readPackageVersion(join(currentDir, "../../package.json")) ?? app.getVersion();
   const appRelease = await fetchLatestGpiRelease().catch(() => undefined);
   const latestAppVersion = appRelease?.version;
+  const piRuntime = await getPiRuntimeStatus();
   const packageInfo = await resolveInstalledPiPackage();
   const bundledPiVersion = packageInfo.packageJsonPath ? await readPackageVersion(packageInfo.packageJsonPath) : undefined;
-  const installedPiVersion = await readInstalledPiCliVersion() ?? bundledPiVersion;
+  const installedPiVersion = piRuntime.pi.version ?? bundledPiVersion;
   let latestPiVersion: string | undefined;
   let error: string | undefined;
 
@@ -452,8 +528,9 @@ async function getUpdateStatus(): Promise<GpiUpdateStatus> {
     latestPiVersion,
     piUpdateAvailable: installedPiVersion && latestPiVersion ? compareSemver(installedPiVersion, latestPiVersion) < 0 : undefined,
     piUpdateCommand: "pi update",
+    piRuntime,
     checkedAt: Date.now(),
-    error: installedPiVersion ? error : `Pi CLI/package not found: ${PI_PACKAGE_NAMES.join(" or ")}`,
+    error: installedPiVersion ? error : piRuntime.missingPackageManagerMessage ?? `Pi CLI/package not found: ${PI_PACKAGE_NAMES.join(" or ")}`,
   };
 }
 
@@ -576,6 +653,41 @@ async function readLocalGpiReleaseNotes(metadataPath: string): Promise<GpiReleas
   }
 }
 
+async function getPiRuntimeStatus(): Promise<GpiUpdateStatus["piRuntime"]> {
+  const [pi, pnpm, npm] = await Promise.all([
+    detectCommand(process.platform === "win32" ? ["pi.cmd", "pi.exe", "pi"] : ["pi"], ["--version"]),
+    detectCommand(process.platform === "win32" ? ["pnpm.cmd", "pnpm.exe", "pnpm"] : ["pnpm"], ["--version"]),
+    detectCommand(process.platform === "win32" ? ["npm.cmd", "npm.exe", "npm"] : ["npm"], ["--version"]),
+  ]);
+  const preferredPackageManager = pnpm.available ? "pnpm" : npm.available ? "npm" : undefined;
+  const installCommand = preferredPackageManager === "pnpm"
+    ? `pnpm add -g ${PRIMARY_PI_PACKAGE_NAME}`
+    : preferredPackageManager === "npm"
+      ? `npm install -g ${PRIMARY_PI_PACKAGE_NAME}`
+      : undefined;
+  return {
+    pi,
+    npm,
+    pnpm,
+    installable: preferredPackageManager !== undefined,
+    preferredPackageManager,
+    installCommand,
+    missingPackageManagerMessage: preferredPackageManager ? undefined : "Pi is missing and neither pnpm nor npm is available on PATH. Install Node.js/npm or pnpm, then retry.",
+  };
+}
+
+async function detectCommand(executableNames: string[], versionArgs: string[]): Promise<GpiUpdateStatus["piRuntime"]["pi"]> {
+  const executablePath = await findExecutablePath(executableNames);
+  if (!executablePath) return { available: false, executablePath: undefined, version: undefined, error: `${executableNames[0] ?? "command"} not found on PATH` };
+  try {
+    const { stdout, stderr } = await runCommand(executablePath, versionArgs, 8_000);
+    return { available: true, executablePath, version: parseVersionText(`${stdout}\n${stderr}`), error: undefined };
+  } catch (unknownError) {
+    const failed = commandErrorText(unknownError);
+    return { available: true, executablePath, version: undefined, error: failed.message };
+  }
+}
+
 async function readInstalledPiCliVersion(): Promise<string | undefined> {
   try {
     const { stdout, stderr } = await runPiCommand(["--version"], 8_000);
@@ -587,6 +699,41 @@ async function readInstalledPiCliVersion(): Promise<string | undefined> {
 
 function parseVersionText(text: string): string | undefined {
   return text.match(/\d+\.\d+\.\d+(?:[-+][\w.-]+)?/)?.[0];
+}
+
+async function installPi(force: boolean): Promise<GpiPiInstallResult> {
+  const before = await getPiRuntimeStatus();
+  if (before.pi.available && !force) {
+    return {
+      ok: false,
+      command: before.installCommand ?? `npm install -g ${PRIMARY_PI_PACKAGE_NAME}`,
+      packageManager: before.preferredPackageManager,
+      output: "",
+      error: "Pi is already available. Use update instead, or explicitly force install.",
+      runtime: before,
+    };
+  }
+  const packageManager = before.preferredPackageManager;
+  if (!packageManager || !before.installCommand) {
+    return { ok: false, command: "", packageManager, output: "", error: before.missingPackageManagerMessage ?? "No supported package manager found.", runtime: before };
+  }
+  const args = packageManager === "pnpm" ? ["add", "-g", PRIMARY_PI_PACKAGE_NAME] : ["install", "-g", PRIMARY_PI_PACKAGE_NAME];
+  try {
+    const { stdout, stderr } = packageManager === "pnpm" ? await runPnpmCommand(args, 120_000) : await runNpmCommand(args, 120_000);
+    const runtime = await getPiRuntimeStatus();
+    const output = [stdout, stderr].filter((text) => text.trim().length > 0).join("\n");
+    return {
+      ok: runtime.pi.available,
+      command: before.installCommand,
+      packageManager,
+      output,
+      error: runtime.pi.available ? undefined : piInstallPathGuidance(runtime),
+      runtime,
+    };
+  } catch (unknownError) {
+    const failed = commandErrorText(unknownError);
+    return { ok: false, command: before.installCommand, packageManager, output: failed.output, error: failed.message, runtime: await getPiRuntimeStatus() };
+  }
 }
 
 async function updatePi(): Promise<GpiPiUpdateResult> {
@@ -640,6 +787,14 @@ function shouldTryPiPackageMigration(error: { message: string; output: string })
   return text.includes(LEGACY_PI_PACKAGE_NAME) && text.includes(PRIMARY_PI_PACKAGE_NAME);
 }
 
+function piInstallPathGuidance(runtime: GpiUpdateStatus["piRuntime"]): string {
+  const packageManager = runtime.preferredPackageManager ?? "npm/pnpm";
+  if (process.platform === "win32") {
+    return `Pi install finished, but GPi cannot find \`pi\` on PATH yet. Close and reopen GPi, or restart your terminal/Windows session so the global ${packageManager} bin directory is added to PATH. If it still fails, verify npm's global bin folder is on PATH.`;
+  }
+  return `Pi install finished, but GPi cannot find \`pi\` on PATH yet. Restart GPi or your shell session, then verify the global ${packageManager} bin directory is on PATH.`;
+}
+
 function friendlyPiUpdateError(message: string, output: string): string {
   const text = `${message}\n${output}`;
   if (text.includes("EBUSY") || text.includes("EPERM")) {
@@ -671,6 +826,10 @@ async function runNpmCommand(args: string[], timeout: number): Promise<{ stdout:
   return runCommand(await findExecutable(process.platform === "win32" ? ["npm.cmd", "npm.exe", "npm"] : ["npm"]), args, timeout);
 }
 
+async function runPnpmCommand(args: string[], timeout: number): Promise<{ stdout: string; stderr: string }> {
+  return runCommand(await findExecutable(process.platform === "win32" ? ["pnpm.cmd", "pnpm.exe", "pnpm"] : ["pnpm"]), args, timeout);
+}
+
 async function runCommand(executable: string, args: string[], timeout: number): Promise<{ stdout: string; stderr: string }> {
   if (process.platform === "win32" && executable.toLowerCase().endsWith(".cmd")) {
     return execFileAsync(executable, args, { timeout, windowsHide: true, maxBuffer: 2_000_000, shell: true });
@@ -683,6 +842,10 @@ async function findPiExecutable(): Promise<string> {
 }
 
 async function findExecutable(executableNames: string[]): Promise<string> {
+  return await findExecutablePath(executableNames) ?? executableNames[0]!;
+}
+
+async function findExecutablePath(executableNames: string[]): Promise<string | undefined> {
   const pathEntries = (process.env.PATH ?? process.env.Path ?? "").split(process.platform === "win32" ? ";" : ":").filter((entry) => entry.trim().length > 0);
   const extraDirs = [
     process.env.APPDATA ? join(process.env.APPDATA, "npm") : undefined,
@@ -703,7 +866,7 @@ async function findExecutable(executableNames: string[]): Promise<string> {
     }
   }
 
-  return executableNames[0]!;
+  return undefined;
 }
 
 async function fetchLatestPiVersion(): Promise<string | undefined> {
@@ -890,6 +1053,31 @@ function requireTurnSnapshotFileSaveInput(value: unknown): TurnSnapshotFileSaveI
 function requireCaptureError(value: unknown): { path: string; message: string } {
   if (!isRecord(value)) throw new Error("Invalid capture error payload");
   return { path: requireString(value.path, "captureError.path"), message: requireString(value.message, "captureError.message") };
+}
+
+function requireImageAttachmentInput(value: unknown): GpiImageAttachmentInput {
+  if (!isRecord(value)) throw new Error("Invalid image attachment payload");
+  return {
+    name: requireString(value.name, "image.name"),
+    mimeType: requireString(value.mimeType, "image.mimeType"),
+    data: requireString(value.data, "image.data"),
+  };
+}
+
+function requireImageAttachments(value: unknown): GpiImageAttachment[] {
+  if (value === undefined) return [];
+  return requireArray(value, "images").map((item) => {
+    if (!isRecord(item)) throw new Error("Invalid image attachment");
+    return {
+      id: requireString(item.id, "image.id"),
+      name: requireString(item.name, "image.name"),
+      mimeType: requireString(item.mimeType, "image.mimeType"),
+      size: requireNumber(item.size, "image.size"),
+      data: requireString(item.data, "image.data"),
+      previewDataUrl: requireString(item.previewDataUrl, "image.previewDataUrl"),
+      storagePath: requireOptionalString(item.storagePath, "image.storagePath"),
+    };
+  });
 }
 
 function requireString(value: unknown, name: string): string {

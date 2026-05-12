@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld("gpi", {
   getUpdateStatus: () => ipcRenderer.invoke("gpi:get-update-status") as Promise<GpiUpdateStatus>,
   getGpiReleaseNotes: (version: string) => ipcRenderer.invoke("gpi:get-gpi-release-notes", version) as Promise<GpiReleaseNotes>,
   updatePi: () => ipcRenderer.invoke("gpi:update-pi") as Promise<GpiPiUpdateResult>,
+  installPi: (force = false) => ipcRenderer.invoke("gpi:install-pi", force) as Promise<GpiPiInstallResult>,
   openExternal: (url: string) => ipcRenderer.invoke("gpi:open-external", url) as Promise<GpiOpenExternalResult>,
   downloadGpiUpdate: (url: string) => ipcRenderer.invoke("gpi:download-gpi-update", url) as Promise<GpiAppUpdateDownloadResult>,
   installGpiUpdate: (installerPath: string) => ipcRenderer.invoke("gpi:install-gpi-update", installerPath) as Promise<GpiAppUpdateInstallResult>,
@@ -40,6 +41,8 @@ contextBridge.exposeInMainWorld("gpi", {
   validateProjectPath: (projectPath: string) => ipcRenderer.invoke("gpi:validate-project-path", projectPath) as Promise<{ ok: boolean; error: string | undefined }>,
   listProjectSessions: (projectId: string) => ipcRenderer.invoke("gpi:list-project-sessions", projectId) as Promise<GpiDiscoveredSession[]>,
   listProjectFiles: (projectId: string) => ipcRenderer.invoke("gpi:list-project-files", projectId) as Promise<GpiProjectFileListing>,
+  chooseImageAttachments: () => ipcRenderer.invoke("gpi:choose-image-attachments") as Promise<GpiImageAttachmentResult[]>,
+  ingestImageAttachment: (input: GpiImageAttachmentInput) => ipcRenderer.invoke("gpi:ingest-image-attachment", input) as Promise<GpiImageAttachmentResult>,
   getPrewarmStatus: () => ipcRenderer.invoke("gpi:get-prewarm-status") as Promise<SdkPiBridgePrewarmSnapshot>,
   getFileDiff: (projectId: string, filePath: string) => ipcRenderer.invoke("gpi:get-file-diff", projectId, filePath) as Promise<{ ok: true; diff: string; kind: "git" | "created" | "unavailable"; message: string | undefined }>,
   getModelOptions: (sessionHandleId: string) => ipcRenderer.invoke("gpi:get-model-options", sessionHandleId) as Promise<GpiModelOptions>,
@@ -51,9 +54,9 @@ contextBridge.exposeInMainWorld("gpi", {
   setAutoCompaction: (sessionHandleId: string, enabled: boolean) => ipcRenderer.invoke("gpi:set-auto-compaction", sessionHandleId, enabled) as Promise<GpiCompactionOptions>,
   createSession: (projectId: string) => ipcRenderer.invoke("gpi:create-session", projectId) as Promise<GpiSessionHandleInfo>,
   openSession: (sessionPath: string, projectPath: string) => ipcRenderer.invoke("gpi:open-session", sessionPath, projectPath) as Promise<GpiSessionHandleInfo>,
-  prompt: (sessionHandleId: string, text: string) => ipcRenderer.invoke("gpi:prompt", sessionHandleId, text) as Promise<{ ok: true }>,
-  followUp: (sessionHandleId: string, text: string) => ipcRenderer.invoke("gpi:follow-up", sessionHandleId, text) as Promise<{ ok: true }>,
-  steer: (sessionHandleId: string, text: string) => ipcRenderer.invoke("gpi:steer", sessionHandleId, text) as Promise<{ ok: true }>,
+  prompt: (sessionHandleId: string, text: string, images?: GpiImageAttachment[]) => ipcRenderer.invoke("gpi:prompt", sessionHandleId, text, images) as Promise<{ ok: true }>,
+  followUp: (sessionHandleId: string, text: string, images?: GpiImageAttachment[]) => ipcRenderer.invoke("gpi:follow-up", sessionHandleId, text, images) as Promise<{ ok: true }>,
+  steer: (sessionHandleId: string, text: string, images?: GpiImageAttachment[]) => ipcRenderer.invoke("gpi:steer", sessionHandleId, text, images) as Promise<{ ok: true }>,
   abort: (sessionHandleId: string) => ipcRenderer.invoke("gpi:abort", sessionHandleId) as Promise<{ ok: true }>,
   onPiEvent: (listener: (event: GpiPiEvent) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, piEvent: GpiPiEvent) => listener(piEvent);

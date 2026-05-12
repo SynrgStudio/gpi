@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { GpiWorkspaceSnapshot } from "../domain/types.js";
+import type { GpiImageAttachment, GpiWorkspaceSnapshot } from "../domain/types.js";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiBridge, GpiPiEvent, GpiPiSessionHandle } from "./pi-bridge.js";
 
 class MockPiSessionHandle implements GpiPiSessionHandle {
@@ -9,7 +9,7 @@ class MockPiSessionHandle implements GpiPiSessionHandle {
 
   constructor(public readonly id: string) {}
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, _images: GpiImageAttachment[] = []): Promise<void> {
     this.emit({ type: "status_changed", sessionId: this.id, status: "streaming" });
     this.emit({ type: "text_delta", sessionId: this.id, delta: text, responseMeta: "Mock model · thinking off" });
     this.emit({
@@ -35,12 +35,12 @@ class MockPiSessionHandle implements GpiPiSessionHandle {
     this.emit({ type: "status_changed", sessionId: this.id, status: "completed" });
   }
 
-  async steer(text: string): Promise<void> {
-    await this.prompt(text);
+  async steer(text: string, images: GpiImageAttachment[] = []): Promise<void> {
+    await this.prompt(text, images);
   }
 
-  async followUp(text: string): Promise<void> {
-    await this.prompt(text);
+  async followUp(text: string, images: GpiImageAttachment[] = []): Promise<void> {
+    await this.prompt(text, images);
   }
 
   async abort(): Promise<void> {

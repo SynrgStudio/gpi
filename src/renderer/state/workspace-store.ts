@@ -42,12 +42,15 @@ export function hydrateWorkspace(persisted: Partial<WorkspaceState> | undefined)
   if (!persisted) return initialWorkspace;
 
   const sessionFiles = persisted.sessionFiles ?? initialWorkspace.sessionFiles;
-  const sessions = (persisted.sessions ?? initialWorkspace.sessions).map((session) => hydrateSessionOrigin(session, sessionFiles));
+  const sessions = (persisted.sessions ?? initialWorkspace.sessions).filter(isSupportedSession).map((session) => hydrateSessionOrigin(session, sessionFiles));
+  const sessionIds = new Set(sessions.map((session) => session.id));
   const messages = persisted.messages ?? initialWorkspace.messages;
   return {
     ...initialWorkspace,
     ...persisted,
     storageVersion: 1,
+    projects: (persisted.projects ?? initialWorkspace.projects).map((project) => ({ ...project, sessionIds: project.sessionIds.filter((sessionId) => sessionIds.has(sessionId)) })),
+    selectedSessionId: sessionIds.has(persisted.selectedSessionId ?? "") ? persisted.selectedSessionId ?? initialWorkspace.selectedSessionId : sessions[0]?.id ?? initialWorkspace.selectedSessionId,
     sessions,
     messages,
     chatMessages: persisted.chatMessages ?? migrateLegacyMessages(messages),
@@ -101,10 +104,32 @@ export function addTurnSnapshotIndexEntry(workspace: WorkspaceState, entry: Turn
 }
 
 export function toPersistedWorkspace(workspace: WorkspaceState): WorkspaceState {
-  return {
+  return stripPersistedImageData({
     ...workspace,
     backendHandles: {},
+  });
+}
+
+function stripPersistedImageData(workspace: WorkspaceState): WorkspaceState {
+  return {
+    ...workspace,
+    chatMessages: Object.fromEntries(Object.entries(workspace.chatMessages).map(([sessionId, messages]) => [sessionId, messages.map(stripChatMessageImageData)])),
+    timelineEvents: Object.fromEntries(Object.entries(workspace.timelineEvents).map(([sessionId, events]) => [sessionId, events.map(stripTimelineEventImageData)])),
   };
+}
+
+function stripChatMessageImageData(message: ChatMessage): ChatMessage {
+  if (!message.imageAttachments || message.imageAttachments.length === 0) return message;
+  return { ...message, imageAttachments: message.imageAttachments.map(stripImageAttachmentData) };
+}
+
+function stripTimelineEventImageData(event: TimelineEvent): TimelineEvent {
+  if (event.kind !== "user_message" || !event.imageAttachments || event.imageAttachments.length === 0) return event;
+  return { ...event, imageAttachments: event.imageAttachments.map(stripImageAttachmentData) };
+}
+
+function stripImageAttachmentData<T extends { data: string; previewDataUrl: string }>(image: T): T {
+  return { ...image, data: "", previewDataUrl: "" };
 }
 
 export function selectSessionInWorkspace(workspace: WorkspaceState, session: GpiSessionSummary): WorkspaceState {
@@ -280,7 +305,7 @@ export function replaceOptimisticSession(
   const temporaryMessages = workspace.messages[temporarySessionId] ?? [];
   const temporaryDraft = workspace.drafts[temporarySessionId] ?? "";
   const updatedSessions = workspace.sessions.map((session) =>
-    session.id === temporarySessionId ? { ...session, id: realSessionId, status: "idle", lastActivity: "Pi SDK session ready", origin: "real" } satisfies GpiSessionSummary : session,
+    session.id === temporarySessionId ? { ...session, id: realSessionId, status: "idle", lastActivity: "Pi session ready", origin: "real" } satisfies GpiSessionSummary : session,
   );
 
   return {
@@ -296,7 +321,7 @@ export function replaceOptimisticSession(
     drafts: replaceRecordKey(workspace.drafts, temporarySessionId, realSessionId, temporaryDraft),
     details: replaceRecordKey(workspace.details, temporarySessionId, realSessionId, [
       ...temporaryDetails,
-      `Pi SDK handle ready in ${options.readyMs.toString()}ms`,
+      `Pi session ready in ${options.readyMs.toString()}ms`,
       options.sessionFile ? `session file: ${options.sessionFile}` : "session file unavailable",
     ]),
     timelineEvents: replaceRecordKey(workspace.timelineEvents, temporarySessionId, realSessionId, workspace.timelineEvents[temporarySessionId] ?? []),
@@ -311,14 +336,14 @@ export function updateDraftInWorkspace(workspace: WorkspaceState, sessionId: str
   return { ...workspace, drafts: { ...workspace.drafts, [sessionId]: value } };
 }
 
-export function markPromptAccepted(workspace: WorkspaceState, sessionId: string, prompt: string, detail: string, lastActivity: string): WorkspaceState {
+export function markPromptAccepted(workspace: WorkspaceState, sessionId: string, prompt: string, detail: string, lastActivity: string, imageAttachments: ChatMessage["imageAttachments"] = []): WorkspaceState {
   return {
     ...workspace,
     sessions: updateSessionStatus(workspace.sessions, sessionId, "thinking", lastActivity),
     messages: { ...workspace.messages, [sessionId]: [...(workspace.messages[sessionId] ?? []), prompt] },
-    chatMessages: appendChatMessage(workspace.chatMessages, sessionId, "user", prompt),
+    chatMessages: appendChatMessage(workspace.chatMessages, sessionId, "user", prompt, undefined, imageAttachments),
     details: { ...workspace.details, [sessionId]: [...(workspace.details[sessionId] ?? []), detail] },
-    timelineEvents: appendUserTimelineEvent(workspace.timelineEvents, sessionId, prompt, detail.startsWith("mock") ? "mock" : "gpi"),
+    timelineEvents: appendUserTimelineEvent(workspace.timelineEvents, sessionId, prompt, detail.startsWith("mock") ? "mock" : "gpi", imageAttachments),
     drafts: { ...workspace.drafts, [sessionId]: "" },
   };
 }
@@ -327,17 +352,17 @@ export function markSessionReopening(workspace: WorkspaceState, sessionId: strin
   return {
     ...workspace,
     sessions: updateSessionStatus(workspace.sessions, sessionId, "thinking", "Reopening Pi session"),
-    details: appendDetail(workspace.details, sessionId, "Reopening Pi SDK handle"),
+    details: appendDetail(workspace.details, sessionId, "Reopening Pi session"),
   };
 }
 
 export function markSessionReopened(workspace: WorkspaceState, sessionId: string, backendHandle: string, sessionFile: string | undefined): WorkspaceState {
   return {
     ...workspace,
-    sessions: updateSessionStatus(workspace.sessions, sessionId, "idle", "Pi SDK handle reopened"),
+    sessions: updateSessionStatus(workspace.sessions, sessionId, "idle", "Pi session reopened"),
     backendHandles: { ...workspace.backendHandles, [sessionId]: backendHandle },
     sessionFiles: sessionFile ? { ...workspace.sessionFiles, [sessionId]: sessionFile } : workspace.sessionFiles,
-    details: appendDetail(workspace.details, sessionId, "Pi SDK handle reopened"),
+    details: appendDetail(workspace.details, sessionId, "Pi session reopened"),
   };
 }
 
@@ -432,8 +457,12 @@ export function reducePiEvent(workspace: WorkspaceState, event: GpiPiEvent): Wor
   }
 }
 
+function isSupportedSession(session: GpiSessionSummary): boolean {
+  return (session as { origin?: string }).origin !== "local";
+}
+
 function hydrateSessionOrigin(session: GpiSessionSummary, sessionFiles: SessionFiles): GpiSessionSummary {
-  const origin = session.origin ?? (sessionFiles[session.id] ? "real" : "local");
+  const origin = session.origin ?? "real";
   const title = origin === "imported" ? compactSessionTitle(session.title) : session.title;
   if ((origin === "real" || origin === "imported") && !sessionFiles[session.id]) {
     return { ...session, origin, title, status: "blocked", lastActivity: "Session file unavailable" };
@@ -495,8 +524,8 @@ function appendStreamingDelta(messages: SessionMessages, sessionId: string, delt
   return { ...messages, [sessionId]: nextMessages };
 }
 
-function appendChatMessage(messages: Record<string, ChatMessage[]>, sessionId: string, role: ChatMessage["role"], text: string, responseMeta?: string): Record<string, ChatMessage[]> {
-  return { ...messages, [sessionId]: [...(messages[sessionId] ?? []), { id: `${sessionId}-${Date.now().toString()}-${Math.random().toString(36).slice(2)}`, role, text, responseMeta }] };
+function appendChatMessage(messages: Record<string, ChatMessage[]>, sessionId: string, role: ChatMessage["role"], text: string, responseMeta?: string, imageAttachments: ChatMessage["imageAttachments"] = []): Record<string, ChatMessage[]> {
+  return { ...messages, [sessionId]: [...(messages[sessionId] ?? []), { id: `${sessionId}-${Date.now().toString()}-${Math.random().toString(36).slice(2)}`, role, text, responseMeta, imageAttachments }] };
 }
 
 function appendAssistantDelta(messages: Record<string, ChatMessage[]>, sessionId: string, delta: string, responseMeta: string | undefined): Record<string, ChatMessage[]> {
@@ -520,9 +549,9 @@ function chatMessagesFromLegacy(messages: SessionMessages): Record<string, ChatM
   } satisfies ChatMessage))]));
 }
 
-function appendUserTimelineEvent(events: SessionTimelineEvents, sessionId: string, text: string, source: TimelineEvent["source"]): SessionTimelineEvents {
+function appendUserTimelineEvent(events: SessionTimelineEvents, sessionId: string, text: string, source: TimelineEvent["source"], imageAttachments: ChatMessage["imageAttachments"] = []): SessionTimelineEvents {
   const base = createTimelineBase(events, sessionId, "user_message", undefined, source);
-  return appendTimelineEvent(events, sessionId, { ...base, turnId: base.id, kind: "user_message", text });
+  return appendTimelineEvent(events, sessionId, { ...base, turnId: base.id, kind: "user_message", text, imageAttachments });
 }
 
 function appendAssistantTimelineDelta(events: SessionTimelineEvents, sessionId: string, delta: string, responseMeta: string | undefined, source: TimelineEvent["source"]): SessionTimelineEvents {

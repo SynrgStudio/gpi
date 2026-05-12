@@ -85,21 +85,21 @@ async function dispatchRequest(request: WorkerRuntimeRequest): Promise<WorkerRun
       return { type: "open_session", remoteSessionId: handle.id, piSessionId: handle.id, sessionFile: handle.sessionFile };
     }
     case "prompt": {
-      const { remoteSessionId, text, runId } = request.payload;
+      const { remoteSessionId, text, runId, images } = request.payload;
       sendEvent({ type: "pi_event", remoteSessionId, runId, event: { type: "timing_mark", sessionId: remoteSessionId, mark: "worker_prompt_received", timestamp: Date.now(), runId } });
       sendEvent({ type: "pi_event", remoteSessionId, runId, event: { type: "run_phase", sessionId: remoteSessionId, phase: "working", status: "started", timestamp: Date.now() } });
-      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).prompt(text));
+      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).prompt(text, images));
       sendEvent({ type: "pi_event", remoteSessionId, runId, event: { type: "timing_mark", sessionId: remoteSessionId, mark: "prompt_dispatched", timestamp: Date.now(), runId } });
       return { type: "prompt", ok: true };
     }
     case "follow_up": {
-      const { remoteSessionId, text } = request.payload;
-      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).followUp(text));
+      const { remoteSessionId, text, images } = request.payload;
+      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).followUp(text, images));
       return { type: "follow_up", ok: true };
     }
     case "steer": {
-      const { remoteSessionId, text } = request.payload;
-      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).steer(text));
+      const { remoteSessionId, text, images } = request.payload;
+      startSessionRun(remoteSessionId, () => requireSession(remoteSessionId).steer(text, images));
       return { type: "steer", ok: true };
     }
     case "abort":

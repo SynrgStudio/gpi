@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { GpiWorkspaceSnapshot, SessionStatus } from "../domain/types.js";
+import type { GpiImageAttachment, GpiWorkspaceSnapshot, SessionStatus } from "../domain/types.js";
 
 export interface GpiModelInfo {
   id: string;
@@ -70,9 +70,9 @@ export type GpiPiEvent =
 export interface GpiPiSessionHandle {
   id: string;
   sessionFile: string | undefined;
-  prompt(text: string): Promise<void>;
-  steer(text: string): Promise<void>;
-  followUp(text: string): Promise<void>;
+  prompt(text: string, images?: GpiImageAttachment[]): Promise<void>;
+  steer(text: string, images?: GpiImageAttachment[]): Promise<void>;
+  followUp(text: string, images?: GpiImageAttachment[]): Promise<void>;
   abort(): Promise<void>;
   getModelOptions(): GpiModelOptions;
   getModelOptionsAsync?(): Promise<GpiModelOptions>;

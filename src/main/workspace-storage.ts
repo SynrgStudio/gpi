@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
-import type { WorkspaceState } from "../domain/types.js";
+import { dirname, join, resolve } from "node:path";
+import type { ChatMessage, GpiImageAttachment, TimelineEvent, WorkspaceState } from "../domain/types.js";
 
 const workspaceFileName = "workspace.v1.json";
 const currentStorageVersion = 1 as const;
@@ -27,7 +27,7 @@ export class WorkspaceStorage {
       const parsed = JSON.parse(content) as unknown;
       if (!isWorkspaceState(parsed)) throw new Error("Workspace file has invalid shape");
       if (parsed.storageVersion > currentStorageVersion) throw new Error(`Workspace file version ${parsed.storageVersion.toString()} is newer than GPi supports`);
-      return { workspace: migrateWorkspace(parsed), path: this.workspacePath, recoveredFromCorruption: false, error: undefined };
+      return { workspace: await this.hydrateStoredImageAttachments(migrateWorkspace(parsed)), path: this.workspacePath, recoveredFromCorruption: false, error: undefined };
     } catch (error) {
       if (isNodeError(error) && error.code === "ENOENT") {
         return { workspace: undefined, path: this.workspacePath, recoveredFromCorruption: false, error: undefined };
@@ -53,6 +53,34 @@ export class WorkspaceStorage {
     await writeFile(temporaryPath, `${JSON.stringify(workspace, null, 2)}\n`, "utf8");
     await replaceFileWithRetry(temporaryPath, this.workspacePath);
     return { ok: true, path: this.workspacePath };
+  }
+
+  private async hydrateStoredImageAttachments(workspace: WorkspaceState): Promise<WorkspaceState> {
+    return {
+      ...workspace,
+      chatMessages: Object.fromEntries(await Promise.all(Object.entries(workspace.chatMessages ?? {}).map(async ([sessionId, messages]) => [sessionId, await Promise.all(messages.map((message) => this.hydrateChatMessageImages(message)))]))),
+      timelineEvents: Object.fromEntries(await Promise.all(Object.entries(workspace.timelineEvents ?? {}).map(async ([sessionId, events]) => [sessionId, await Promise.all(events.map((event) => this.hydrateTimelineEventImages(event)))]))),
+    };
+  }
+
+  private async hydrateChatMessageImages(message: ChatMessage): Promise<ChatMessage> {
+    if (!message.imageAttachments || message.imageAttachments.length === 0) return message;
+    return { ...message, imageAttachments: await Promise.all(message.imageAttachments.map((image) => this.hydrateImageAttachment(image))) };
+  }
+
+  private async hydrateTimelineEventImages(event: TimelineEvent): Promise<TimelineEvent> {
+    if (event.kind !== "user_message" || !event.imageAttachments || event.imageAttachments.length === 0) return event;
+    return { ...event, imageAttachments: await Promise.all(event.imageAttachments.map((image) => this.hydrateImageAttachment(image))) };
+  }
+
+  private async hydrateImageAttachment(image: GpiImageAttachment): Promise<GpiImageAttachment> {
+    if (image.previewDataUrl || !image.storagePath || !isStoredAttachmentPath(image.storagePath)) return image;
+    try {
+      const data = (await readFile(image.storagePath)).toString("base64");
+      return { ...image, data, previewDataUrl: `data:${image.mimeType};base64,${data}` };
+    } catch {
+      return image;
+    }
   }
 
   private async backupCorruptWorkspace(): Promise<void> {
@@ -115,6 +143,11 @@ function delay(ms: number): Promise<void> {
 
 function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
   return { ...workspace, storageVersion: currentStorageVersion };
+}
+
+function isStoredAttachmentPath(path: string): boolean {
+  const resolved = resolve(path);
+  return resolved.includes(`${join("attachments", "images")}`);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1354,6 +1354,67 @@ button {
   white-space: pre;
 }
 
+.message-image-grid {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.message-image-grid figure {
+  overflow: hidden;
+  margin: 0;
+  border: 1px solid rgba(212, 212, 216, 0.22);
+  border-radius: 10px;
+  background: rgba(24, 24, 27, 0.72);
+}
+
+.message-image-grid button {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.message-image-grid img {
+  display: block;
+  max-width: min(420px, 100%);
+  max-height: 300px;
+  object-fit: contain;
+}
+
+.message-image-placeholder {
+  display: grid;
+  width: min(420px, 100%);
+  min-width: 220px;
+  min-height: 120px;
+  place-items: center;
+  gap: 4px;
+  padding: 18px;
+  color: rgba(161, 161, 170, 0.72);
+  background: linear-gradient(135deg, rgba(39, 39, 42, 0.56), rgba(24, 24, 27, 0.72));
+  text-align: center;
+  font-size: 12px;
+}
+
+.message-image-placeholder strong {
+  color: rgba(244, 244, 245, 0.82);
+  font-weight: 600;
+}
+
+.message-image-placeholder span {
+  max-width: 190px;
+}
+
+.message-image-grid figcaption {
+  overflow: hidden;
+  padding: 6px 8px;
+  color: rgba(212, 212, 216, 0.68);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
 .message-meta-row {
   display: flex;
   align-items: center;
@@ -1817,6 +1878,58 @@ button {
 .composer-stats-compact:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.composer-attachment-error {
+  margin: 0 14px 9px;
+  padding: 7px 8px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 8px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.18);
+  font-size: 12px;
+}
+
+.composer-image-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 14px 9px;
+}
+
+.composer-image-attachments button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 7px;
+  max-width: 280px;
+  padding: 5px 7px 5px 5px;
+  border: 1px solid rgba(212, 212, 216, 0.34);
+  border-radius: 8px;
+  color: rgba(244, 244, 245, 0.9);
+  background: rgba(63, 63, 70, 0.34);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.composer-image-attachments img {
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.composer-image-attachments span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-image-attachments small,
+.composer-image-attachments i {
+  color: rgba(212, 212, 216, 0.58);
+  font-style: normal;
+  pointer-events: none;
 }
 
 .composer-mention-chips {
@@ -3674,6 +3787,65 @@ body::after {
   padding: 24px;
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
+}
+
+.image-preview-backdrop {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 34px;
+  background: rgba(3, 7, 18, 0.62);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+.image-preview-dialog {
+  position: relative;
+  display: grid;
+  max-width: min(92vw, 1200px);
+  max-height: min(88vh, 900px);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: rgba(18, 18, 22, 0.94);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+}
+
+.image-preview-dialog img {
+  display: block;
+  max-width: 92vw;
+  max-height: calc(88vh - 38px);
+  object-fit: contain;
+}
+
+.image-preview-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0 2px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  color: rgba(244, 244, 245, 0.88);
+  background: rgba(15, 15, 18, 0.72);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.image-preview-caption {
+  overflow: hidden;
+  padding: 9px 12px;
+  color: rgba(212, 212, 216, 0.72);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
 }
 
 .settings-backdrop {

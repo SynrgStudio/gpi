@@ -3,12 +3,11 @@ import { flushSync } from "react-dom";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import gpiIconUrl from "../assets/gpi-icon.svg";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
-import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
+import type { ChatMessage, ContinuityWorkflowStatus, GpiImageAttachment, GpiImageAttachmentResult, GpiProject, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
   addOptimisticRealSession,
   addProjectToWorkspace,
   addTurnSnapshotIndexEntry,
-  addSessionToWorkspace,
   appendRevertResultEvent,
   applyMockEventToWorkspace,
   archiveSessionInWorkspace,
@@ -38,9 +37,8 @@ import {
 
 const originLabels = {
   imported: "Imported",
-  local: "Local",
   mock: "Mock",
-  real: "Pi SDK",
+  real: "Pi",
 } as const;
 
 const statusLabels: Record<SessionStatus, string> = {
@@ -326,9 +324,11 @@ export function App() {
   const [quickSwitcherIndex, setQuickSwitcherIndex] = useState(0);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | undefined>();
   const [revertPreview, setRevertPreview] = useState<RevertPreviewState | undefined>();
+  const [imagePreview, setImagePreview] = useState<GpiImageAttachment | undefined>();
   const [workflowSkillsStatus, setWorkflowSkillsStatus] = useState<WorkflowSkillsStatus | undefined>();
   const [workflowOnboardingOpen, setWorkflowOnboardingOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<SettingsSection>("revert");
   const [workflowOnboardingStep, setWorkflowOnboardingStep] = useState<"install" | "intro" | "simulation">("intro");
   const [workflowSkillPreview, setWorkflowSkillPreview] = useState<{ name: WorkflowSkillName; text: string } | undefined>();
   const [workflowInstallStatus, setWorkflowInstallStatus] = useState<string | undefined>();
@@ -341,6 +341,7 @@ export function App() {
   const [updateStatusChecked, setUpdateStatusChecked] = useState(false);
   const [workflowStatusChecked, setWorkflowStatusChecked] = useState(false);
   const [piUpdateRunning, setPiUpdateRunning] = useState(false);
+  const [piInstallRunning, setPiInstallRunning] = useState(false);
   const [piUpdateMessage, setPiUpdateMessage] = useState<string | undefined>();
   const [gpiUpdateInstallerPath, setGpiUpdateInstallerPath] = useState<string | undefined>();
   const [gpiUpdateMessage, setGpiUpdateMessage] = useState<string | undefined>();
@@ -657,6 +658,15 @@ export function App() {
         latestPiVersion: undefined,
         piUpdateAvailable: undefined,
         piUpdateCommand: "pi update",
+        piRuntime: {
+          pi: { available: false, executablePath: undefined, version: undefined, error: message },
+          npm: { available: false, executablePath: undefined, version: undefined, error: "not checked" },
+          pnpm: { available: false, executablePath: undefined, version: undefined, error: "not checked" },
+          installable: false,
+          preferredPackageManager: undefined,
+          installCommand: undefined,
+          missingPackageManagerMessage: message,
+        },
         checkedAt: Date.now(),
         error: message,
       });
@@ -689,6 +699,22 @@ export function App() {
       setGpiUpdateMessage(`GPi update download failed: ${message}`);
     } finally {
       setGpiUpdateDownloading(false);
+    }
+  }
+
+  async function installPiFromSettings(): Promise<void> {
+    if (!window.gpi) return;
+    setPiInstallRunning(true);
+    setPiUpdateMessage(`Installing Pi with \`${updateStatus?.piRuntime.installCommand ?? "npm install -g @earendil-works/pi-coding-agent"}\`...`);
+    try {
+      const result = await window.gpi.installPi(false);
+      setPiUpdateMessage(result.ok ? `Pi install finished. ${result.output || result.command}` : `Pi install needs attention: ${result.error ?? result.output}`);
+      await refreshUpdateStatus(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setPiUpdateMessage(`Pi install failed: ${message}`);
+    } finally {
+      setPiInstallRunning(false);
     }
   }
 
@@ -818,7 +844,7 @@ export function App() {
     if (command === "plan-continuity") sendPrompt(selectedDraft.trim().length > 0 ? `/plan-cont ${selectedDraft.trim()}` : "/plan-cont");
     if (command === "start-continuity") sendPrompt(selectedDraft.trim().length > 0 ? `/start-cont ${selectedDraft.trim()}` : "/start-cont");
     if (command === "finish-continuity") sendPrompt(selectedDraft.trim().length > 0 ? `/end-cont ${selectedDraft.trim()}` : "/end-cont");
-    if (command === "new-real-session") void createRealPiSession();
+    if (command === "new-pi-session") void createPiSession();
     if (command === "import-pi-sessions") void importCurrentProjectSessions();
     if (command === "next-attention") jumpToNextAttentionSession();
     if (command === "toggle-archived") setShowArchivedSessions((current) => !current);
@@ -1016,24 +1042,7 @@ export function App() {
     });
   }
 
-  function createSession(): void {
-    if (!selectedProject) return;
-
-    const sessionNumber = selectedProject.sessionIds.length + 1;
-    const sessionId = `${selectedProject.id}-local-${Date.now().toString(36)}`;
-    const newSession: GpiSessionSummary = {
-      id: sessionId,
-      projectId: selectedProject.id,
-      title: `Local session ${sessionNumber}`,
-      status: "idle",
-      lastActivity: "Created locally",
-      origin: "local",
-    };
-
-    setWorkspace((current) => addSessionToWorkspace(current, selectedProject.id, newSession));
-  }
-
-  async function createRealPiSession(targetProject = selectedProject): Promise<void> {
+  async function createPiSession(targetProject = selectedProject): Promise<void> {
     if (!targetProject) return;
     if (!window.gpi) {
       setBridgeError("GPi preload API is not available. Restart Electron after running npm run compile:electron.");
@@ -1041,6 +1050,23 @@ export function App() {
     }
 
     setBridgeError(undefined);
+    const runtimeStatus = updateStatus ?? await window.gpi.getUpdateStatus();
+    setUpdateStatus(runtimeStatus);
+    if (!runtimeStatus.piRuntime.pi.available) {
+      setConfirmDialog({
+        title: "Pi runtime is missing",
+        body: runtimeStatus.piRuntime.installCommand
+          ? `GPi needs the Pi CLI before it can create sessions. Open Runtime settings to run: ${runtimeStatus.piRuntime.installCommand}`
+          : runtimeStatus.piRuntime.missingPackageManagerMessage ?? "GPi cannot find the Pi CLI or a supported package manager on PATH.",
+        confirmLabel: "Open Runtime settings",
+        tone: "neutral",
+        onConfirm: () => {
+          setSettingsInitialSection("runtime");
+          setSettingsOpen(true);
+        },
+      });
+      return;
+    }
     const prewarm = await window.gpi.getPrewarmStatus();
     const clickedAt = performance.now();
     const temporarySessionId = `${targetProject.id}-connecting-${Date.now().toString(36)}`;
@@ -1048,9 +1074,9 @@ export function App() {
     const optimisticSession: GpiSessionSummary = {
       id: temporarySessionId,
       projectId: targetProject.id,
-      title: `Real Pi session ${sessionNumber}`,
+      title: `Pi session ${sessionNumber}`,
       status: "connecting",
-      lastActivity: "Connecting to Pi SDK",
+      lastActivity: "Connecting to Pi",
       origin: "real",
     };
 
@@ -1058,7 +1084,7 @@ export function App() {
       addOptimisticRealSession(current, targetProject.id, optimisticSession, [
         "visual session created immediately",
         `prewarm: ${prewarm.status}${prewarm.durationMs === undefined ? "" : ` in ${prewarm.durationMs.toString()}ms`}`,
-        "creating Pi SDK handle...",
+        "creating Pi session...",
       ]),
     );
 
@@ -1072,7 +1098,7 @@ export function App() {
       }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      setWorkspace((current) => markSessionError(current, temporarySessionId, "Pi SDK connection failed", `error: ${message}`));
+      setWorkspace((current) => markSessionError(current, temporarySessionId, "Pi connection failed", `error: ${message}`));
     }
   }
 
@@ -1121,30 +1147,31 @@ export function App() {
     }
   }
 
-  function sendPrompt(promptOverride?: string): void {
+  function sendPrompt(promptOverride?: string, images: GpiImageAttachment[] = []): void {
     const rawPrompt = promptOverride?.trim() ?? selectedDraft.trim();
-    const prompt = applyFileMentionPromptPolicy(rawPrompt, projectFiles?.entries ?? []);
-    if (!selectedSession || rawPrompt.length === 0) return;
+    const userPrompt = rawPrompt.length === 0 && images.length > 0 ? "Please inspect the attached image(s)." : rawPrompt;
+    const prompt = applyFileMentionPromptPolicy(userPrompt, projectFiles?.entries ?? []);
+    if (!selectedSession || (rawPrompt.length === 0 && images.length === 0)) return;
     const sessionId = selectedSession.id;
     const acceptedDetail = selectedSessionBusy ? "Pi follow-up queued" : selectedBackendHandle || selectedSessionFile ? "Pi prompt sent" : "mock event: agent_start";
     const acceptedActivity = selectedSessionBusy ? "Follow-up queued" : selectedBackendHandle || selectedSessionFile ? "Pi prompt accepted" : "Prompt accepted";
     setWorkspace((current) => {
-      const accepted = markPromptAccepted(current, sessionId, rawPrompt, acceptedDetail, acceptedActivity);
+      const accepted = markPromptAccepted(current, sessionId, userPrompt, acceptedDetail, acceptedActivity, images);
       return current.settings.revertSafeEditsEnabled && !prompt.trimStart().startsWith("/") ? markRevertSafeTurn(accepted, sessionId) : accepted;
     });
 
     if (window.gpi && selectedSessionFile && !selectedBackendHandle && selectedProject) {
-      void reopenAndSendRealPiPrompt(sessionId, selectedSessionFile, selectedProject.path, prompt);
+      void reopenAndSendRealPiPrompt(sessionId, selectedSessionFile, selectedProject.path, prompt, images);
       return;
     }
 
     if (selectedBackendHandle && window.gpi) {
       if (selectedSessionBusy) {
-        void sendRealPiFollowUp(sessionId, selectedBackendHandle, prompt);
+        void sendRealPiFollowUp(sessionId, selectedBackendHandle, prompt, images);
         return;
       }
 
-      void sendRealPiPrompt(sessionId, selectedBackendHandle, prompt);
+      void sendRealPiPrompt(sessionId, selectedBackendHandle, prompt, images);
       return;
     }
 
@@ -1199,7 +1226,7 @@ export function App() {
     }
   }
 
-  async function reopenAndSendRealPiPrompt(sessionId: string, sessionFile: string, projectPath: string, prompt: string): Promise<void> {
+  async function reopenAndSendRealPiPrompt(sessionId: string, sessionFile: string, projectPath: string, prompt: string, images: GpiImageAttachment[] = []): Promise<void> {
     if (!window.gpi) return;
 
     setWorkspace((current) => markSessionReopening(current, sessionId));
@@ -1207,7 +1234,7 @@ export function App() {
     try {
       const handle = await window.gpi.openSession(sessionFile, projectPath);
       setWorkspace((current) => markSessionReopened(current, sessionId, handle.id, handle.sessionFile));
-      await sendRealPiPrompt(sessionId, handle.id, prompt);
+      await sendRealPiPrompt(sessionId, handle.id, prompt, images);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBridgeError(message);
@@ -1240,9 +1267,9 @@ export function App() {
     }
   }
 
-  async function sendRealPiPrompt(sessionId: string, backendHandle: string, prompt: string): Promise<void> {
+  async function sendRealPiPrompt(sessionId: string, backendHandle: string, prompt: string, images: GpiImageAttachment[] = []): Promise<void> {
     try {
-      await window.gpi?.prompt(backendHandle, applyRevertSafePromptPolicy(prompt, workspaceRef.current.settings.revertSafeEditsEnabled));
+      await window.gpi?.prompt(backendHandle, applyRevertSafePromptPolicy(prompt, workspaceRef.current.settings.revertSafeEditsEnabled), images);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBridgeError(message);
@@ -1250,9 +1277,9 @@ export function App() {
     }
   }
 
-  async function sendRealPiFollowUp(sessionId: string, backendHandle: string, prompt: string): Promise<void> {
+  async function sendRealPiFollowUp(sessionId: string, backendHandle: string, prompt: string, images: GpiImageAttachment[] = []): Promise<void> {
     try {
-      await window.gpi?.followUp(backendHandle, applyRevertSafePromptPolicy(prompt, workspaceRef.current.settings.revertSafeEditsEnabled));
+      await window.gpi?.followUp(backendHandle, applyRevertSafePromptPolicy(prompt, workspaceRef.current.settings.revertSafeEditsEnabled), images);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       setBridgeError(message);
@@ -1385,9 +1412,8 @@ export function App() {
         onChooseProjectEditPath={() => void chooseProjectEditPath()}
         onChooseProjectPath={() => void addProjectFromPalette()}
         importStatus={importStatus}
-        onCreateLocalSession={createSession}
         onCreateProject={createProject}
-        onCreateRealSession={(project) => void createRealPiSession(project)}
+        onCreatePiSession={(project) => void createPiSession(project)}
         onImportProjectSessions={() => void importCurrentProjectSessions()}
         onJumpToNextAttentionSession={jumpToNextAttentionSession}
         onOpenQuickSwitcher={openQuickSwitcher}
@@ -1415,7 +1441,10 @@ export function App() {
             </div>
             <h1>{selectedSession?.title ?? "No session"}</h1>
           </div>
-          <WindowControls updateStatus={updateStatus} updateStatusLoading={updateStatusLoading} onOpenSettings={() => setSettingsOpen(true)} />
+          <WindowControls updateStatus={updateStatus} updateStatusLoading={updateStatusLoading} onOpenSettings={() => {
+            setSettingsInitialSection("revert");
+            setSettingsOpen(true);
+          }} />
         </header>
 
         <div className="chat-session-shell">
@@ -1429,8 +1458,9 @@ export function App() {
               timelineEvents={selectedTimelineEvents}
               turnSnapshots={workspace.turnSnapshots}
               selectedSessionId={selectedSession?.id}
+              onPreviewImage={setImagePreview}
               onPreviewRevert={(snapshot) => void openRevertPreview(snapshot)}
-              onCreateSession={() => void createRealPiSession(selectedProject)}
+              onCreateSession={() => void createPiSession(selectedProject)}
               selectedSessionStatus={selectedSession?.status}
             />
 
@@ -1449,7 +1479,7 @@ export function App() {
                 onCompact={() => void compactSelectedSession()}
                 onChange={updateDraft}
                 onModelChange={(value) => void changeModel(value)}
-                onSend={(draft) => sendPrompt(draft)}
+                onSend={(draft, images) => sendPrompt(draft, images)}
                 onThinkingChange={(value) => void changeThinkingLevel(value)}
                 workflowLabel={workflowLabel()}
                 focusKey={selectedSession?.id}
@@ -1478,13 +1508,16 @@ export function App() {
 
       {confirmDialog ? <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(undefined)} /> : null}
       {revertPreview ? <RevertPreviewDialog onApply={() => void applyRevertPreview(revertPreview)} preview={revertPreview} onClose={() => setRevertPreview(undefined)} /> : null}
+      {imagePreview ? <ImagePreviewDialog image={imagePreview} onClose={() => setImagePreview(undefined)} /> : null}
       {settingsOpen ? (
         <SettingsDialog
+          initialSection={settingsInitialSection}
           projectFilesPanelVisible={workspace.settings.projectFilesPanelVisible}
           revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
           gpiUpdateDownloading={gpiUpdateDownloading}
           gpiUpdateInstallerReady={Boolean(gpiUpdateInstallerPath)}
           gpiUpdateMessage={gpiUpdateMessage}
+          piInstallRunning={piInstallRunning}
           piUpdateMessage={piUpdateMessage}
           piUpdateRunning={piUpdateRunning}
           updateStatus={updateStatus}
@@ -1494,6 +1527,7 @@ export function App() {
           workflowStatus={workflowSkillsStatus}
           onClose={() => setSettingsOpen(false)}
           onCloseWorkflowPreview={() => setWorkflowSkillPreview(undefined)}
+          onInstallPi={() => void installPiFromSettings()}
           onInstallWorkflowSkills={() => void installWorkflowSkills()}
           onPreviewWorkflowSkill={(skillName) => void previewWorkflowSkill(skillName)}
           onProjectFilesPanelVisibleChange={(visible) => setWorkspace((current) => updateProjectFilesPanelVisibleSetting(current, visible))}
@@ -1567,7 +1601,7 @@ export function App() {
   );
 }
 
-type PaletteCommand = "add-project" | "finish-continuity" | "import-pi-sessions" | "initialize-continuity" | "install-workflow-skills" | "new-real-session" | "next-attention" | "plan-continuity" | "restore-selected-session" | "start-continuity" | "take-plan-onboarding" | "toggle-archived";
+type PaletteCommand = "add-project" | "finish-continuity" | "import-pi-sessions" | "initialize-continuity" | "install-workflow-skills" | "new-pi-session" | "next-attention" | "plan-continuity" | "restore-selected-session" | "start-continuity" | "take-plan-onboarding" | "toggle-archived";
 
 type ConfirmDialogState = {
   title: string;
@@ -1831,12 +1865,36 @@ function PiInstallOnboardingDialog(props: { onClose: () => void }) {
   );
 }
 
+function ImagePreviewDialog(props: { image: GpiImageAttachment; onClose: () => void }) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      props.onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [props]);
+
+  return (
+    <div className="image-preview-backdrop" onMouseDown={props.onClose}>
+      <div className="image-preview-dialog" onMouseDown={(event) => event.stopPropagation()}>
+        <button className="image-preview-close" onClick={props.onClose} title="Close image preview" type="button">×</button>
+        <img alt={props.image.name} src={props.image.previewDataUrl} />
+        <div className="image-preview-caption">{props.image.name}</div>
+      </div>
+    </div>
+  );
+}
+
 function SettingsDialog(props: {
+  initialSection: SettingsSection;
   projectFilesPanelVisible: boolean;
   revertSafeEditsEnabled: boolean;
   gpiUpdateDownloading: boolean;
   gpiUpdateInstallerReady: boolean;
   gpiUpdateMessage: string | undefined;
+  piInstallRunning: boolean;
   piUpdateMessage: string | undefined;
   piUpdateRunning: boolean;
   updateStatus: GpiUpdateStatus | undefined;
@@ -1846,6 +1904,7 @@ function SettingsDialog(props: {
   workflowStatus: WorkflowSkillsStatus | undefined;
   onClose: () => void;
   onCloseWorkflowPreview: () => void;
+  onInstallPi: () => void;
   onInstallWorkflowSkills: () => void;
   onPreviewWorkflowSkill: (skillName: WorkflowSkillName) => void;
   onProjectFilesPanelVisibleChange: (visible: boolean) => void;
@@ -1855,7 +1914,7 @@ function SettingsDialog(props: {
   onUpdatePi: () => void;
   onUpdateWorkflowSkills: () => void;
 }) {
-  const [activeSection, setActiveSection] = useState<"interface" | "onboarding" | "revert" | "updates">("revert");
+  const [activeSection, setActiveSection] = useState<SettingsSection>(props.initialSection);
   const missingCount = props.workflowStatus?.skills.filter((skill) => skill.status === "missing").length ?? 0;
   const conflictCount = props.workflowStatus?.skills.filter((skill) => skill.status === "conflict").length ?? 0;
   const allInstalled = Boolean(props.workflowStatus && props.workflowStatus.skills.every((skill) => skill.status === "installed"));
@@ -1907,6 +1966,11 @@ function SettingsDialog(props: {
               <span className="session-copy"><strong>Onboarding</strong><small>Continuity skills</small></span>
               <span className="session-meta-stack" />
             </button>
+            <button className={activeSection === "runtime" ? "session-row selected settings-section-row" : "session-row settings-section-row"} onClick={() => setActiveSection("runtime")} type="button">
+              <span />
+              <span className="session-copy"><strong>Runtime</strong><small>Pi install and PATH</small></span>
+              <span className="session-meta-stack" />
+            </button>
             <button className={activeSection === "updates" ? "session-row selected settings-section-row" : "session-row settings-section-row"} onClick={() => setActiveSection("updates")} type="button">
               <span />
               <span className="session-copy"><strong>Updates</strong><small>GPi and Pi.dev</small></span>
@@ -1928,32 +1992,54 @@ function SettingsDialog(props: {
           </header>
 
           <div className="settings-panel">
+            {activeSection === "runtime" ? (
+              <section className="settings-card">
+                <div className="settings-card-heading">
+                  <span>Runtime</span>
+                  <strong>Pi install and PATH</strong>
+                </div>
+                <p>GPi uses the official Pi CLI. Missing runtimes can be installed with npm or pnpm, but installs only run when you click the button below. If Windows cannot see a new global install immediately, close and reopen GPi so PATH is refreshed.</p>
+                <div className="settings-status-list">
+                  <span><strong>Pi CLI</strong><small>{formatRuntimeCommandStatus(props.updateStatus?.piRuntime.pi, props.updateStatusLoading)}</small></span>
+                  <span><strong>pnpm</strong><small>{formatRuntimeCommandStatus(props.updateStatus?.piRuntime.pnpm, props.updateStatusLoading)}</small></span>
+                  <span><strong>npm</strong><small>{formatRuntimeCommandStatus(props.updateStatus?.piRuntime.npm, props.updateStatusLoading)}</small></span>
+                  <span><strong>Preferred install</strong><small>{props.updateStatus?.piRuntime.installCommand ?? props.updateStatus?.piRuntime.missingPackageManagerMessage ?? "Not checked yet."}</small></span>
+                </div>
+                {props.piUpdateMessage ? <div className="settings-inline-warning">{props.piUpdateMessage}</div> : null}
+                <div className="settings-update-actions">
+                  <button className="settings-secondary-button" onClick={props.onRefreshWorkflowSkills} title="Refresh runtime status" type="button">{props.updateStatusLoading ? "Looking..." : "Refresh Runtime"}</button>
+                  {props.updateStatus && !props.updateStatus.piRuntime.pi.available && props.updateStatus.piRuntime.installable ? (
+                    <button className="settings-primary-button" disabled={props.piInstallRunning} onClick={props.onInstallPi} title={`Run ${props.updateStatus.piRuntime.installCommand ?? "official Pi install"}`} type="button">{props.piInstallRunning ? "Installing Pi..." : "Install Pi"}</button>
+                  ) : null}
+                  {props.updateStatus?.piUpdateAvailable ? (
+                    <button className="settings-primary-button" disabled={props.piUpdateRunning} onClick={props.onUpdatePi} title="Run pi update" type="button">{props.piUpdateRunning ? "Updating Pi..." : "Update Pi"}</button>
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
+
             {activeSection === "updates" ? (
               <section className="settings-card">
                 <div className="settings-card-heading">
                   <span>Updates</span>
                   <strong>GPi and Pi.dev</strong>
                 </div>
-                <p>GPi checks GitHub releases for app updates. Pi is loaded through the bundled coding-agent package and checked against npm for update availability.</p>
+                <p>GPi checks GitHub releases for app updates. Pi runtime install/update status lives in Runtime so app updates and CLI runtime management stay separate.</p>
                 <div className="settings-status-list">
                   <span><strong>GPi</strong><small>{formatGpiUpdateStatus(props.updateStatus, props.updateStatusLoading)}</small></span>
                   <span>
-                    <strong>Pi.dev package</strong>
+                    <strong>Pi runtime</strong>
                     <small>{formatPiUpdateStatus(props.updateStatus, props.updateStatusLoading)}</small>
                   </span>
                 </div>
                 {props.updateStatus?.error && !props.updateStatus.installedPiVersion ? <div className="settings-inline-warning">{props.updateStatus.error}</div> : null}
                 {props.gpiUpdateMessage ? <div className="settings-inline-warning">{props.gpiUpdateMessage}</div> : null}
-                {props.piUpdateMessage ? <div className="settings-inline-warning">{props.piUpdateMessage}</div> : null}
                 <div className="settings-update-actions">
                   <button className="settings-secondary-button" onClick={props.onRefreshWorkflowSkills} title="Check GPi/Pi versions and update availability" type="button">{props.updateStatusLoading ? "Looking..." : "Look for Updates"}</button>
                   {props.updateStatus?.appUpdateAvailable && (props.updateStatus.appInstallerUrl || props.updateStatus.appReleaseUrl) ? (
                     <button className="settings-primary-button" disabled={props.gpiUpdateDownloading} onClick={props.onUpdateGpi} title={props.gpiUpdateInstallerReady ? "Close GPi and run the downloaded installer" : "Download the latest GPi installer"} type="button">
                       {props.gpiUpdateDownloading ? "Downloading..." : props.gpiUpdateInstallerReady ? "Install Update" : "Update GPi"}
                     </button>
-                  ) : null}
-                  {props.updateStatus?.piUpdateAvailable ? (
-                    <button className="settings-primary-button" disabled={props.piUpdateRunning} onClick={props.onUpdatePi} title="Run pi update" type="button">{props.piUpdateRunning ? "Updating Pi..." : "Update Pi"}</button>
                   ) : null}
                 </div>
               </section>
@@ -2055,22 +2141,39 @@ function formatGpiUpdateStatus(status: GpiUpdateStatus | undefined, loading: boo
 function formatPiUpdateStatus(status: GpiUpdateStatus | undefined, loading: boolean): string {
   if (loading && !status) return "Checking installed and latest versions...";
   if (!status) return "Version status not loaded yet.";
-  const installed = status.installedPiVersion ? `installed ${status.installedPiVersion}` : "installed version unknown";
+  const installed = status.piRuntime.pi.available
+    ? `installed ${status.installedPiVersion ?? status.piRuntime.pi.version ?? "unknown"}`
+    : "Pi CLI missing";
   const latest = status.latestPiVersion ? `latest ${status.latestPiVersion}` : "latest unknown";
   const update = status.piUpdateAvailable === true ? "update available" : status.piUpdateAvailable === false ? "up to date" : "update status unknown";
-  return `${status.piPackageName} · ${installed} · ${latest} · ${update} · ${status.piUpdateCommand}`;
+  const install = status.piRuntime.installCommand ? `install: ${status.piRuntime.installCommand}` : status.piRuntime.missingPackageManagerMessage ?? "not installable";
+  return `${status.piPackageName} · ${installed} · ${latest} · ${update} · ${status.piUpdateCommand} · ${install}`;
 }
 
-function settingsSectionTitle(section: "interface" | "onboarding" | "revert" | "updates"): string {
+type SettingsSection = "interface" | "onboarding" | "revert" | "runtime" | "updates";
+
+type RuntimeCommandStatus = GpiUpdateStatus["piRuntime"]["pi"];
+
+function formatRuntimeCommandStatus(status: RuntimeCommandStatus | undefined, loading: boolean): string {
+  if (loading && !status) return "Checking PATH...";
+  if (!status) return "Not checked yet.";
+  if (!status.available) return status.error ?? "Not found on PATH.";
+  const version = status.version ? ` · ${status.version}` : "";
+  return `${status.executablePath ?? "available"}${version}`;
+}
+
+function settingsSectionTitle(section: SettingsSection): string {
   if (section === "interface") return "Interface";
   if (section === "onboarding") return "Onboarding";
+  if (section === "runtime") return "Runtime";
   if (section === "updates") return "Updates";
   return "Revert";
 }
 
-function settingsSectionSubtitle(section: "interface" | "onboarding" | "revert" | "updates"): string {
+function settingsSectionSubtitle(section: SettingsSection): string {
   if (section === "interface") return "Panels and UI toggles";
   if (section === "onboarding") return "Continuity skills and updates";
+  if (section === "runtime") return "Pi install, package managers, and PATH";
   if (section === "updates") return "GPi and Pi.dev local status";
   return "Message revert and prompt injection";
 }
@@ -2343,9 +2446,8 @@ function ProjectSidebar(props: {
   showArchivedSessions: boolean;
   onChooseProjectEditPath: () => void;
   onChooseProjectPath: () => void;
-  onCreateLocalSession: () => void;
   onCreateProject: () => void;
-  onCreateRealSession: (project?: GpiProject) => void;
+  onCreatePiSession: (project?: GpiProject) => void;
   onImportProjectSessions: () => void;
   onJumpToNextAttentionSession: () => void;
   onOpenQuickSwitcher: () => void;
@@ -2402,7 +2504,7 @@ function ProjectSidebar(props: {
         showArchivedSessions={props.showArchivedSessions}
         onArchiveSession={props.onArchiveSession}
         onCompactSession={props.onCompactSession}
-        onCreateRealSession={props.onCreateRealSession}
+        onCreatePiSession={props.onCreatePiSession}
         onCancelPrewarmSession={props.onCancelPrewarmSession}
         onPrewarmSession={props.onPrewarmSession}
         onSelectProject={props.onSelectProject}
@@ -2434,7 +2536,7 @@ function ProjectList(props: {
   showArchivedSessions: boolean;
   onArchiveSession: (sessionId: string) => void;
   onCompactSession: (session: GpiSessionSummary) => void;
-  onCreateRealSession: (project?: GpiProject) => void;
+  onCreatePiSession: (project?: GpiProject) => void;
   onCancelPrewarmSession: (sessionId: string) => void;
   onPrewarmSession: (session: GpiSessionSummary) => void;
   onSelectProject: (project: GpiProject) => void;
@@ -2557,7 +2659,7 @@ function ProjectList(props: {
                 onClick={(event) => {
                   event.stopPropagation();
                   props.onSelectProject(project);
-                  props.onCreateRealSession(project);
+                  props.onCreatePiSession(project);
                 }}
                 type="button"
               >
@@ -2694,6 +2796,7 @@ function MessageTimeline(props: {
   turnSnapshots: TurnSnapshotIndex;
   selectedSessionId: string | undefined;
   selectedSessionStatus: SessionStatus | undefined;
+  onPreviewImage: (image: GpiImageAttachment) => void;
   onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void;
   onCreateSession: () => void;
 }) {
@@ -2767,9 +2870,9 @@ function MessageTimeline(props: {
           </div>
         ) : null}
         {props.timelineEvents.length > 0 ? (
-          <TypedTimelineEvents events={props.timelineEvents} status={props.selectedSessionStatus} turnSnapshots={props.turnSnapshots} onPreviewRevert={props.onPreviewRevert} />
+          <TypedTimelineEvents events={props.timelineEvents} status={props.selectedSessionStatus} turnSnapshots={props.turnSnapshots} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />
         ) : (
-          <LinearTimelineMessages details={props.details} messages={props.messages} projectId={props.projectId} selectedSessionId={props.selectedSessionId} status={props.selectedSessionStatus} />
+          <LinearTimelineMessages details={props.details} messages={props.messages} onPreviewImage={props.onPreviewImage} projectId={props.projectId} selectedSessionId={props.selectedSessionId} status={props.selectedSessionStatus} />
         )}
         <div ref={bottomRef} />
       </div>
@@ -2803,12 +2906,12 @@ function timelineAutoScrollSignal(events: TimelineEvent[]): string {
   }).join("|");
 }
 
-function TypedTimelineEvents(props: { events: TimelineEvent[]; status: SessionStatus | undefined; turnSnapshots: TurnSnapshotIndex; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
+function TypedTimelineEvents(props: { events: TimelineEvent[]; status: SessionStatus | undefined; turnSnapshots: TurnSnapshotIndex; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
   const events = useMemo(() => [...props.events].filter((event) => event.kind !== "stats").sort((a, b) => a.order - b.order), [props.events]);
   const grouped = useMemo(() => groupTimelineEvents(events), [events]);
   return (
     <>
-      {grouped.map((item) => item.kind === "single" ? <TypedTimelineEventBlock event={item.event} key={item.event.id} /> : <TimelineRunSupercard collapseWhenInactive={item.followedByAssistantMessage} events={item.events} key={`group-${item.turnId}`} snapshot={findTurnSnapshot(props.turnSnapshots, item.events)} onPreviewRevert={props.onPreviewRevert} />)}
+      {grouped.map((item) => item.kind === "single" ? <TypedTimelineEventBlock event={item.event} key={item.event.id} onPreviewImage={props.onPreviewImage} /> : <TimelineRunSupercard collapseWhenInactive={item.followedByAssistantMessage} events={item.events} key={`group-${item.turnId}`} snapshot={findTurnSnapshot(props.turnSnapshots, item.events)} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />)}
       {shouldShowLiveActivity(events, props.status) ? <TimelineLiveActivity status={props.status} /> : null}
     </>
   );
@@ -2855,7 +2958,7 @@ function findTurnSnapshot(turnSnapshots: TurnSnapshotIndex, events: TimelineEven
   return turnSnapshots[event.sessionId]?.[event.turnId];
 }
 
-function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: TimelineEvent[]; snapshot: TurnSnapshotIndexEntry | undefined; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
+function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: TimelineEvent[]; snapshot: TurnSnapshotIndexEntry | undefined; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
   const active = props.events.some((event) => isTimelineEventActive(event));
   const [expanded, setExpanded] = useState(active);
   const tools = props.events.filter((event) => event.kind === "tool").length;
@@ -2891,7 +2994,7 @@ function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: Ti
       </div>
       <div className="timeline-run-supercard-content" aria-hidden={!expanded}>
         <div className="timeline-run-supercard-body">
-          {props.events.map((event) => <TypedTimelineEventBlock event={event} key={event.id} />)}
+          {props.events.map((event) => <TypedTimelineEventBlock event={event} key={event.id} onPreviewImage={props.onPreviewImage} />)}
         </div>
       </div>
     </div>
@@ -2937,9 +3040,9 @@ function liveActivityCopy(status: SessionStatus): string {
   return "The run is active. GPi is waiting for Pi events.";
 }
 
-function TypedTimelineEventBlock(props: { event: TimelineEvent }) {
+function TypedTimelineEventBlock(props: { event: TimelineEvent; onPreviewImage: (image: GpiImageAttachment) => void }) {
   const event = props.event;
-  if (event.kind === "user_message") return <TimelineMessage message={{ id: event.id, role: "user", text: event.text }} />;
+  if (event.kind === "user_message") return <TimelineMessage message={{ id: event.id, role: "user", text: event.text, imageAttachments: event.imageAttachments }} onPreviewImage={props.onPreviewImage} />;
   if (event.kind === "assistant_message") return <TimelineMessage message={{ id: event.id, role: "assistant", text: event.text, responseMeta: event.responseMeta }} />;
   if (event.kind === "diff") return <TimelineDiffEvent event={event} />;
   if (event.kind === "tool") return <TimelineActionEvent event={event} title={event.toolName} eyebrow={event.status === "started" ? "Tool started" : event.isError ? "Tool error" : "Tool finished"} tone={event.isError ? "error" : event.status === "started" ? "active" : "success"} />;
@@ -3079,7 +3182,7 @@ function isTimelineEventActive(event: TimelineEvent): boolean {
   return ((event.kind === "tool" || event.kind === "command" || event.kind === "run_phase") && event.status === "started");
 }
 
-function LinearTimelineMessages(props: { details: string[]; messages: ChatMessage[]; projectId: string | undefined; selectedSessionId: string | undefined; status: SessionStatus | undefined }) {
+function LinearTimelineMessages(props: { details: string[]; messages: ChatMessage[]; onPreviewImage: (image: GpiImageAttachment) => void; projectId: string | undefined; selectedSessionId: string | undefined; status: SessionStatus | undefined }) {
   const lastMessage = props.messages.at(-1);
   const currentTurnDetails = getCurrentTurnDetails(props.details);
   const shouldPlaceWorkBeforeLastAssistant = lastMessage?.role === "assistant" && hasWorkActivity(currentTurnDetails, props.status);
@@ -3088,12 +3191,12 @@ function LinearTimelineMessages(props: { details: string[]; messages: ChatMessag
   return (
     <>
       {visibleMessages.map((message, index) => (
-        <TimelineMessage key={message.id} message={message} />
+        <TimelineMessage key={message.id} message={message} onPreviewImage={props.onPreviewImage} />
       ))}
       <WorkActivity details={currentTurnDetails} status={props.status} />
       <TimelineDiffs details={currentTurnDetails} projectId={props.projectId} />
       {shouldPlaceWorkBeforeLastAssistant && lastMessage ? (
-        <TimelineMessage key={lastMessage.id} message={lastMessage} />
+        <TimelineMessage key={lastMessage.id} message={lastMessage} onPreviewImage={props.onPreviewImage} />
       ) : null}
     </>
   );
@@ -3193,12 +3296,15 @@ function responseMetaLabel(message: ChatMessage): string {
   return message.responseMeta ? `Response · ${message.responseMeta}` : "Response";
 }
 
-function TimelineMessage(props: { message: ChatMessage }) {
+function TimelineMessage(props: { message: ChatMessage; onPreviewImage?: (image: GpiImageAttachment) => void }) {
   if (props.message.role === "user") {
     return (
       <article className="timeline-row user-row">
         <div className="message-group user-message-group">
-          <div className="user-bubble"><MessageMarkdown text={props.message.text} /></div>
+          <div className="user-bubble">
+            {props.message.text.trim().length > 0 ? <MessageMarkdown text={props.message.text} /> : null}
+            {props.message.imageAttachments && props.message.imageAttachments.length > 0 ? <MessageImages images={props.message.imageAttachments} onPreviewImage={props.onPreviewImage} /> : null}
+          </div>
           <MessageCopyButton text={props.message.text} />
         </div>
       </article>
@@ -3246,6 +3352,23 @@ function CodeBlock(props: { block: Extract<MarkdownBlock, { kind: "code" }> }) {
         <MessageCopyButton label="Copy" text={props.block.code} />
       </div>
       <pre><code>{props.block.code}</code></pre>
+    </div>
+  );
+}
+
+function MessageImages(props: { images: GpiImageAttachment[]; onPreviewImage?: (image: GpiImageAttachment) => void }) {
+  return (
+    <div className="message-image-grid">
+      {props.images.map((image) => (
+        <figure key={image.id}>
+          {image.previewDataUrl ? (
+            <button onClick={() => props.onPreviewImage?.(image)} title="Open image preview" type="button">
+              <img alt={image.name} src={image.previewDataUrl} />
+            </button>
+          ) : <div className="message-image-placeholder"><strong>Preview unavailable</strong><span>The stored attachment file could not be loaded.</span></div>}
+          <figcaption>{image.name}</figcaption>
+        </figure>
+      ))}
     </div>
   );
 }
@@ -3341,7 +3464,7 @@ function Composer(props: {
   onChange: (value: string) => void;
   onCompact: () => void;
   onModelChange: (value: string) => void;
-  onSend: (draft: string) => void;
+  onSend: (draft: string, images: GpiImageAttachment[]) => void;
   onThinkingChange: (value: string) => void;
   workflowLabel: string;
   focusKey: string | undefined;
@@ -3355,13 +3478,15 @@ function Composer(props: {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [localDraft, setLocalDraft] = useState(props.draft);
   const [mentionChipPaths, setMentionChipPaths] = useState<string[]>([]);
+  const [imageAttachments, setImageAttachments] = useState<GpiImageAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | undefined>();
   const [mentionQuery, setMentionQuery] = useState<string | undefined>();
   const [mentionIndex, setMentionIndex] = useState(0);
   const currentModelValue = props.modelOptions?.currentModel ? `${props.modelOptions.currentModel.provider}/${props.modelOptions.currentModel.id}` : "";
   const models = selectableModels(props.modelOptions);
   const canSelectModel = props.hasRealHandle && !props.isBusy && models.length > 0;
   const canSelectThinking = props.hasRealHandle && !props.isBusy && Boolean(props.modelOptions?.supportsThinking);
-  const composerStatus = props.isCompacting ? "Compacting" : props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi SDK connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session";
+  const composerStatus = props.isCompacting ? "Compacting" : props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session";
   const mentionIndexEntries = useMemo(() => props.projectFiles.filter((file) => file.kind === "file"), [props.projectFiles]);
   const mentionSuggestions = useMemo(() => mentionQuery === undefined ? [] : findFileMentionSuggestions(mentionIndexEntries, mentionQuery), [mentionQuery, mentionIndexEntries]);
 
@@ -3375,6 +3500,8 @@ function Composer(props: {
   useEffect(() => {
     setLocalDraft(props.draft);
     setMentionChipPaths([]);
+    setImageAttachments([]);
+    setAttachmentError(undefined);
     setMentionQuery(undefined);
   }, [props.focusKey]);
 
@@ -3407,6 +3534,39 @@ function Composer(props: {
     setLocalDraft(value);
     const nextMentionQuery = activeMentionQuery(value, cursor);
     setMentionQuery((current) => current === nextMentionQuery ? current : nextMentionQuery);
+  }
+
+  async function attachImagesFromPicker(): Promise<void> {
+    if (!window.gpi) return;
+    addImageAttachmentResults(await window.gpi.chooseImageAttachments());
+  }
+
+  async function attachImageFiles(files: FileList | File[]): Promise<void> {
+    if (!window.gpi) return;
+    const imageFiles = [...files].filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) return;
+    const results = await Promise.all(imageFiles.map(async (file) => window.gpi?.ingestImageAttachment({ name: file.name || "image", mimeType: file.type || "application/octet-stream", data: await readFileAsBase64(file) }) ?? { ok: false as const, error: "GPi bridge unavailable" }));
+    addImageAttachmentResults(results);
+  }
+
+  function addImageAttachmentResults(results: GpiImageAttachmentResult[]): void {
+    const attachments = results.filter((result): result is Extract<GpiImageAttachmentResult, { ok: true }> => result.ok).map((result) => result.attachment);
+    const errors = results.filter((result): result is Extract<GpiImageAttachmentResult, { ok: false }> => !result.ok).map((result) => result.error);
+    if (attachments.length > 0) setImageAttachments((current) => [...current, ...attachments]);
+    setAttachmentError(errors[0]);
+  }
+
+  function submitComposer(): void {
+    const prompt = promptWithMentionChips();
+    const images = imageAttachments;
+    flushSync(() => {
+      setLocalDraft("");
+      setMentionChipPaths([]);
+      setImageAttachments([]);
+      setAttachmentError(undefined);
+      props.onChange("");
+    });
+    props.onSend(prompt, images);
   }
 
   function addMentionChip(path: string): void {
@@ -3445,12 +3605,29 @@ function Composer(props: {
 
   return (
     <footer className="composer-region">
-      <div className="composer-card">
+      <div
+        className="composer-card"
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          void attachImageFiles(event.dataTransfer.files);
+        }}
+      >
         <textarea
           aria-label="Prompt"
           disabled={props.disabled}
           onChange={(event) => updateComposerValue(event.target.value, event.target.selectionStart)}
           onClick={(event) => setMentionQuery(activeMentionQuery(localDraft, event.currentTarget.selectionStart))}
+          onPaste={(event) => {
+            const files = event.clipboardData.files;
+            if (files.length > 0 && [...files].some((file) => file.type.startsWith("image/"))) {
+              event.preventDefault();
+              void attachImageFiles(files);
+            }
+          }}
           ref={textareaRef}
           onKeyDown={(event) => {
             if (mentionSuggestions.length > 0 && mentionQuery !== undefined) {
@@ -3477,15 +3654,26 @@ function Composer(props: {
             }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              const prompt = promptWithMentionChips();
-              props.onChange(prompt);
-              props.onSend(prompt);
+              submitComposer();
             }
           }}
           placeholder="Ask Pi to inspect, change, explain, or plan..."
           rows={3}
           value={localDraft}
         />
+        {attachmentError ? <div className="composer-attachment-error">{attachmentError}</div> : null}
+        {imageAttachments.length > 0 ? (
+          <div className="composer-image-attachments">
+            {imageAttachments.map((image) => (
+              <button key={image.id} onClick={() => setImageAttachments((current) => current.filter((item) => item.id !== image.id))} title={`Remove ${image.name}`} type="button">
+                <img alt="" src={image.previewDataUrl} />
+                <span>{image.name}</span>
+                <small>{formatBytes(image.size)}</small>
+                <i aria-hidden="true">×</i>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {mentionChipPaths.length > 0 ? (
           <div className="composer-mention-chips">
             {mentionChipPaths.map((path) => (
@@ -3544,11 +3732,8 @@ function Composer(props: {
           <div className="composer-controls">
             {props.isCompacting && props.hasRealHandle ? <button className="abort-button" onClick={props.onAbortCompaction} title="Abort compaction" type="button">Abort compact</button> : null}
             {props.isBusy && props.hasRealHandle && !props.isCompacting ? <button className="abort-button" onClick={props.onAbort} title="Abort the running Pi turn" type="button">Abort</button> : null}
-            <button className="send-button" disabled={props.disabled || props.isCompacting || (localDraft.trim().length === 0 && mentionChipPaths.length === 0)} onClick={() => {
-              const prompt = promptWithMentionChips();
-              props.onChange(prompt);
-              props.onSend(prompt);
-            }} title={props.isCompacting ? "Wait for compaction to finish" : props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
+            <button className="mode-button" onClick={() => void attachImagesFromPicker()} title="Attach images" type="button">Attach</button>
+            <button className="send-button" disabled={props.disabled || props.isCompacting || (localDraft.trim().length === 0 && mentionChipPaths.length === 0 && imageAttachments.length === 0)} onClick={submitComposer} title={props.isCompacting ? "Wait for compaction to finish" : props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
               {props.isBusy && props.hasRealHandle && !props.isCompacting ? "Follow up" : "Send"}
             </button>
           </div>
@@ -3557,6 +3742,25 @@ function Composer(props: {
       </div>
     </footer>
   );
+}
+
+function readFileAsBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      const commaIndex = result.indexOf(",");
+      resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes.toString()} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024).toString()} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 function activeMentionToken(text: string, cursor: number): { start: number; query: string } | undefined {
@@ -3772,7 +3976,7 @@ function SessionInspector(props: {
           <div className="compaction-controls">
             <div>
               <strong>Compaction</strong>
-              <small>{props.hasRealHandle ? props.compactionOptions?.isCompacting ? "Running" : "Pi SDK ready" : "Open a real session"}</small>
+              <small>{props.hasRealHandle ? props.compactionOptions?.isCompacting ? "Running" : "Pi ready" : "Open a Pi session"}</small>
             </div>
             <div className="compaction-actions">
               {props.compactionOptions?.isCompacting ? (
@@ -4063,7 +4267,7 @@ function buildQuickSwitcherItems(
     context.hasSelectedSession && context.workflowSkillsInstalled ? commandPaletteItem("plan-continuity", "Plan queue", "Send /plan-cont once") : undefined,
     context.hasSelectedSession && context.workflowSkillsInstalled ? commandPaletteItem("start-continuity", "Start queue", "Send /start-cont once") : undefined,
     context.hasSelectedSession && context.workflowSkillsInstalled ? commandPaletteItem("finish-continuity", "End continuity", "Send /end-cont once") : undefined,
-    context.hasSelectedProject ? commandPaletteItem("new-real-session", "New Session", "Start a new Pi chat in the selected project") : undefined,
+    context.hasSelectedProject ? commandPaletteItem("new-pi-session", "New Session", "Start a new Pi chat in the selected project") : undefined,
     context.hasSelectedProject ? commandPaletteItem("import-pi-sessions", "Import Pi sessions", "Discover existing Pi sessions for this project") : undefined,
     commandPaletteItem("next-attention", "Next attention session", "Jump to the next waiting/error/running session"),
     commandPaletteItem("toggle-archived", showArchivedSessions ? "Hide archived sessions" : "Show archived sessions", "Toggle archived sessions in the sidebar"),

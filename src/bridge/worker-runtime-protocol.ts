@@ -1,5 +1,5 @@
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { GpiDiscoveredSession } from "../domain/types.js";
+import type { GpiDiscoveredSession, GpiImageAttachment } from "../domain/types.js";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "./pi-bridge.js";
 
 export type WorkerRuntimeRequestId = string;
@@ -58,19 +58,19 @@ export type WorkerRuntimeRequestPayload =
   | { type: "compact"; remoteSessionId: WorkerRuntimeRemoteSessionId; customInstructions?: string }
   | { type: "create_session"; projectId: string; projectPath: string }
   | { type: "dispose_session"; remoteSessionId: WorkerRuntimeRemoteSessionId }
-  | { type: "follow_up"; remoteSessionId: WorkerRuntimeRemoteSessionId; runId: WorkerRuntimeRunId; text: string }
+  | { type: "follow_up"; remoteSessionId: WorkerRuntimeRemoteSessionId; runId: WorkerRuntimeRunId; text: string; images?: GpiImageAttachment[] }
   | { type: "get_compaction_options"; remoteSessionId: WorkerRuntimeRemoteSessionId }
   | { type: "get_model_options"; remoteSessionId: WorkerRuntimeRemoteSessionId }
   | { type: "get_session_stats"; remoteSessionId: WorkerRuntimeRemoteSessionId }
   | { type: "health" }
   | { type: "list_sessions"; projectPath: string }
   | { type: "open_session"; sessionPath: string; projectPath: string }
-  | { type: "prompt"; remoteSessionId: WorkerRuntimeRemoteSessionId; runId: WorkerRuntimeRunId; text: string }
+  | { type: "prompt"; remoteSessionId: WorkerRuntimeRemoteSessionId; runId: WorkerRuntimeRunId; text: string; images?: GpiImageAttachment[] }
   | { type: "set_auto_compaction"; remoteSessionId: WorkerRuntimeRemoteSessionId; enabled: boolean }
   | { type: "set_model"; remoteSessionId: WorkerRuntimeRemoteSessionId; provider: string; modelId: string }
   | { type: "set_thinking_level"; remoteSessionId: WorkerRuntimeRemoteSessionId; level: ThinkingLevel }
   | { type: "shutdown" }
-  | { type: "steer"; remoteSessionId: WorkerRuntimeRemoteSessionId; text: string };
+  | { type: "steer"; remoteSessionId: WorkerRuntimeRemoteSessionId; text: string; images?: GpiImageAttachment[] };
 
 export type WorkerRuntimeResponsePayload =
   | { type: "abort"; ok: true }

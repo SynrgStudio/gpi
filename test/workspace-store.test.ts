@@ -133,7 +133,7 @@ describe("workspace store reducers", () => {
       title: "Session B",
       status: "idle",
       lastActivity: "Idle",
-      origin: "local",
+      origin: "real",
     };
     const expanded: WorkspaceState = {
       ...workspace,
@@ -143,6 +143,7 @@ describe("workspace store reducers", () => {
       chatMessages: { ...workspace.chatMessages, [otherSession.id]: [{ id: "m", role: "user", text: "keep" }] },
       drafts: { ...workspace.drafts, [otherSession.id]: "draft" },
       details: { ...workspace.details, [otherSession.id]: ["detail"] },
+      sessionFiles: { ...workspace.sessionFiles, [otherSession.id]: "C:/Users/example/.pi/session-b.jsonl" },
     };
 
     const reduced = removeProjectFromWorkspace(expanded, "project-a");
@@ -161,7 +162,7 @@ describe("workspace store reducers", () => {
       title: "Session B",
       status: "idle",
       lastActivity: "Idle",
-      origin: "local",
+      origin: "real",
     };
     const expanded: WorkspaceState = {
       ...workspace,

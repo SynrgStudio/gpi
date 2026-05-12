@@ -2,7 +2,7 @@ import { fork } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
 import { createWorkerRuntimeError, isWorkerRuntimeEvent, isWorkerRuntimeResponse } from "../bridge/worker-runtime-protocol.js";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { GpiDiscoveredSession } from "../domain/types.js";
+import type { GpiDiscoveredSession, GpiImageAttachment } from "../domain/types.js";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent, GpiPiSessionHandle } from "../bridge/pi-bridge.js";
 import type { WorkerRuntimeEvent, WorkerRuntimeHealthSnapshot, WorkerRuntimeRemoteSessionId, WorkerRuntimeRequest, WorkerRuntimeRequestPayload, WorkerRuntimeResponse, WorkerRuntimeResponsePayload, WorkerRuntimeWorkerId } from "../bridge/worker-runtime-protocol.js";
 
@@ -91,16 +91,16 @@ class RemoteWorkerPiSessionHandle implements GpiPiSessionHandle {
     });
   }
 
-  async prompt(text: string): Promise<void> {
-    await this.expectOk(await this.worker.request({ type: "prompt", remoteSessionId: this.id, runId: createRunId(this.id), text }, longRunningRequestTimeoutMs), "prompt");
+  async prompt(text: string, images: GpiImageAttachment[] = []): Promise<void> {
+    await this.expectOk(await this.worker.request({ type: "prompt", remoteSessionId: this.id, runId: createRunId(this.id), text, images }, longRunningRequestTimeoutMs), "prompt");
   }
 
-  async steer(text: string): Promise<void> {
-    await this.expectOk(await this.worker.request({ type: "steer", remoteSessionId: this.id, text }, longRunningRequestTimeoutMs), "steer");
+  async steer(text: string, images: GpiImageAttachment[] = []): Promise<void> {
+    await this.expectOk(await this.worker.request({ type: "steer", remoteSessionId: this.id, text, images }, longRunningRequestTimeoutMs), "steer");
   }
 
-  async followUp(text: string): Promise<void> {
-    await this.expectOk(await this.worker.request({ type: "follow_up", remoteSessionId: this.id, runId: createRunId(this.id), text }, longRunningRequestTimeoutMs), "follow_up");
+  async followUp(text: string, images: GpiImageAttachment[] = []): Promise<void> {
+    await this.expectOk(await this.worker.request({ type: "follow_up", remoteSessionId: this.id, runId: createRunId(this.id), text, images }, longRunningRequestTimeoutMs), "follow_up");
   }
 
   async abort(): Promise<void> {

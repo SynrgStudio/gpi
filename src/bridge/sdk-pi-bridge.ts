@@ -4,12 +4,16 @@ import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, ImageContent, Model } from "@earendil-works/pi-ai";
 import type { AgentSession, AgentSessionEvent } from "@earendil-works/pi-coding-agent";
-import type { GpiDiscoveredSession, GpiWorkspaceSnapshot, SessionStatus } from "../domain/types.js";
+import type { GpiDiscoveredSession, GpiImageAttachment, GpiWorkspaceSnapshot, SessionStatus } from "../domain/types.js";
 import type { GpiCompactionOptions, GpiFileChangeHint, GpiFileDiffHint, GpiFileSnapshotHint, GpiModelInfo, GpiModelOptions, GpiPiBridge, GpiPiEvent, GpiPiSessionHandle } from "./pi-bridge.js";
 
 const execFileAsync = promisify(execFile);
+
+function toPiImages(images: GpiImageAttachment[]): ImageContent[] {
+  return images.map((image) => ({ type: "image", data: image.data, mimeType: image.mimeType }));
+}
 
 interface ToolStartMetadata {
   startedAt: number;
@@ -46,27 +50,27 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
     this.unsubscribe = this.session.subscribe((event) => this.handleEvent(event));
   }
 
-  async prompt(text: string): Promise<void> {
+  async prompt(text: string, images: GpiImageAttachment[] = []): Promise<void> {
     try {
-      await this.session.prompt(text);
+      await this.session.prompt(text, images.length > 0 ? { images: toPiImages(images) } : undefined);
     } catch (error) {
       this.emitError(error);
       throw error;
     }
   }
 
-  async steer(text: string): Promise<void> {
+  async steer(text: string, images: GpiImageAttachment[] = []): Promise<void> {
     try {
-      await this.session.steer(text);
+      await this.session.steer(text, toPiImages(images));
     } catch (error) {
       this.emitError(error);
       throw error;
     }
   }
 
-  async followUp(text: string): Promise<void> {
+  async followUp(text: string, images: GpiImageAttachment[] = []): Promise<void> {
     try {
-      await this.session.followUp(text);
+      await this.session.followUp(text, toPiImages(images));
     } catch (error) {
       this.emitError(error);
       throw error;

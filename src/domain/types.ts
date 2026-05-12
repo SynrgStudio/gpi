@@ -11,7 +11,7 @@ export type SessionStatus =
   | "error"
   | "completed";
 
-export type SessionOrigin = "mock" | "local" | "real" | "imported";
+export type SessionOrigin = "mock" | "real" | "imported";
 
 export interface GpiProject {
   id: string;
@@ -67,10 +67,31 @@ export interface GpiProjectFileListing {
   excludedDirectories: string[];
 }
 
+export interface GpiImageAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  data: string;
+  previewDataUrl: string;
+  storagePath: string | undefined;
+}
+
+export interface GpiImageAttachmentInput {
+  name: string;
+  mimeType: string;
+  data: string;
+}
+
+export type GpiImageAttachmentResult =
+  | { ok: true; attachment: GpiImageAttachment }
+  | { ok: false; error: string };
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
   text: string;
+  imageAttachments?: GpiImageAttachment[];
   responseMeta?: string;
 }
 
@@ -86,7 +107,7 @@ export interface TimelineEventBase {
 }
 
 export type TimelineEvent =
-  | (TimelineEventBase & { kind: "user_message"; text: string })
+  | (TimelineEventBase & { kind: "user_message"; text: string; imageAttachments?: GpiImageAttachment[] })
   | (TimelineEventBase & { kind: "assistant_message"; text: string; responseMeta?: string; streaming: boolean })
   | (TimelineEventBase & { kind: "run_phase"; phase: "preparing_tool" | "working" | "thinking"; status: "started" | "finished"; startedAt: number; endedAt?: number; text?: string })
   | (TimelineEventBase & {
@@ -259,6 +280,23 @@ export interface GpiReleaseNotes {
   source: "github" | "local-update-metadata";
 }
 
+export interface GpiCommandAvailability {
+  available: boolean;
+  executablePath: string | undefined;
+  version: string | undefined;
+  error: string | undefined;
+}
+
+export interface GpiPiRuntimeStatus {
+  pi: GpiCommandAvailability;
+  npm: GpiCommandAvailability;
+  pnpm: GpiCommandAvailability;
+  installable: boolean;
+  preferredPackageManager: "npm" | "pnpm" | undefined;
+  installCommand: string | undefined;
+  missingPackageManagerMessage: string | undefined;
+}
+
 export interface GpiUpdateStatus {
   appVersion: string;
   latestAppVersion: string | undefined;
@@ -272,6 +310,7 @@ export interface GpiUpdateStatus {
   latestPiVersion: string | undefined;
   piUpdateAvailable: boolean | undefined;
   piUpdateCommand: string;
+  piRuntime: GpiPiRuntimeStatus;
   checkedAt: number;
   error: string | undefined;
 }
@@ -295,6 +334,15 @@ export interface GpiPiUpdateResult {
   command: string;
   output: string;
   error: string | undefined;
+}
+
+export interface GpiPiInstallResult {
+  ok: boolean;
+  command: string;
+  packageManager: "npm" | "pnpm" | undefined;
+  output: string;
+  error: string | undefined;
+  runtime: GpiPiRuntimeStatus;
 }
 
 export interface WorkspaceState extends GpiWorkspaceSnapshot {
