@@ -6,6 +6,27 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 ### Added
 
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
+## [0.0.9] - 2026-05-12
+### Added
+
 - Added a bounded project file listing IPC API for future file tree and @ mentions.
 - Added a read-only project files panel with collapsible directories and click-to-add file mention chips.
 - Added composer `@` file mention autocomplete with keyboard and mouse selection.
@@ -19,7 +40,9 @@ All notable GPi changes are documented here. Releases must move relevant entries
 ### Fixed
 
 - Fixed slow project file tree collapse/open behavior by keeping collapse state local to the panel.
-- Fixed file mention insertion latency by updating the composer locally before workspace synchronization.
+- Fixed file mention insertion latency by updating the composer locally before workspace synchroni
+
+zation.
 - Fixed project file tree refresh expanding previously collapsed directories.
 
 ### Packaging

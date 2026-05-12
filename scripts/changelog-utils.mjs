@@ -12,9 +12,13 @@ export async function readChangelog(changelogPath = "CHANGELOG.md") {
 
 export function extractVersionSection(changelog, version) {
   const escapedVersion = version.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const pattern = new RegExp(`^## \\[${escapedVersion}\\][^\\n]*\\n([\\s\\S]*?)(?=^## \\[|\\z)`, "m");
-  const match = changelog.match(pattern);
-  return match?.[1]?.trim();
+  const pattern = new RegExp(`^## \\[${escapedVersion}\\][^\\n]*\\n`, "m");
+  const match = pattern.exec(changelog);
+  if (!match) return undefined;
+  const start = match.index + match[0].length;
+  const nextHeader = changelog.slice(start).search(/^## \[/m);
+  const end = nextHeader === -1 ? changelog.length : start + nextHeader;
+  return changelog.slice(start, end).trim();
 }
 
 export function assertVersionSection(changelog, version) {
