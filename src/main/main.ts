@@ -1,13 +1,13 @@
 import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { execFile, spawn } from "node:child_process";
-import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -26,6 +26,9 @@ const PI_PACKAGE_NAMES: readonly string[] = [PRIMARY_PI_PACKAGE_NAME, LEGACY_PI_
 const GPI_RELEASES_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/latest";
 const GPI_RELEASE_BY_TAG_API_URL = "https://api.github.com/repos/SynrgStudio/gpi/releases/tags/";
 const GPI_APP_ICON_PATH = app.isPackaged ? join(process.resourcesPath, "assets", "gpi-logo.png") : resolve(currentDir, "../../resources/assets/gpi-logo.png");
+const PROJECT_FILE_LIST_MAX_DEPTH = 6;
+const PROJECT_FILE_LIST_MAX_ENTRIES = 2_000;
+const PROJECT_FILE_LIST_EXCLUDED_DIRECTORIES = new Set([".cache", ".git", ".gpi-package", ".next", ".turbo", ".vite", "coverage", "dist", "dist-test", "node_modules", "out", "release"]);
 
 void bridge.prewarm().then((snapshot) => {
   if (snapshot.status === "ready") {
@@ -104,6 +107,7 @@ function registerIpc(window: BrowserWindow): void {
     const projectPath = await resolveProjectPath(requireString(projectId, "projectId"));
     return workerRuntimeManager.listSessions(projectPath);
   });
+  ipcMain.handle("gpi:list-project-files", async (_event, projectId: unknown) => listProjectFiles(requireString(projectId, "projectId")));
 
   ipcMain.handle("gpi:choose-project-path", async () => {
     const result = await dialog.showOpenDialog(window, {
@@ -228,6 +232,65 @@ function registerIpc(window: BrowserWindow): void {
     await handle.abort();
     return { ok: true };
   });
+}
+
+async function listProjectFiles(projectId: string): Promise<GpiProjectFileListing> {
+  const projectPath = await resolveProjectPath(projectId);
+  const entries: GpiProjectFileEntry[] = [];
+  let truncated = false;
+
+  async function walk(directoryPath: string, depth: number): Promise<void> {
+    if (truncated || depth > PROJECT_FILE_LIST_MAX_DEPTH) return;
+    let directoryEntries = await readdir(directoryPath, { withFileTypes: true });
+    directoryEntries = directoryEntries
+      .filter((entry) => !entry.name.startsWith(".") || !PROJECT_FILE_LIST_EXCLUDED_DIRECTORIES.has(entry.name))
+      .sort((left, right) => Number(right.isDirectory()) - Number(left.isDirectory()) || left.name.localeCompare(right.name));
+
+    for (const entry of directoryEntries) {
+      if (truncated) return;
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory() && PROJECT_FILE_LIST_EXCLUDED_DIRECTORIES.has(entry.name)) continue;
+      if (!entry.isDirectory() && !entry.isFile()) continue;
+
+      const absolutePath = resolve(directoryPath, entry.name);
+      const relativePath = safeProjectRelativePath(projectPath, absolutePath);
+      if (!relativePath) continue;
+
+      const stats = await stat(absolutePath).catch(() => undefined);
+      entries.push({
+        path: relativePath,
+        name: entry.name,
+        kind: entry.isDirectory() ? "directory" : "file",
+        depth,
+        size: entry.isFile() ? stats?.size : undefined,
+        modifiedAt: stats?.mtimeMs,
+      });
+
+      if (entries.length >= PROJECT_FILE_LIST_MAX_ENTRIES) {
+        truncated = true;
+        return;
+      }
+
+      if (entry.isDirectory()) await walk(absolutePath, depth + 1);
+    }
+  }
+
+  await walk(projectPath, 0);
+  return {
+    projectId,
+    projectPath,
+    entries,
+    truncated,
+    maxEntries: PROJECT_FILE_LIST_MAX_ENTRIES,
+    maxDepth: PROJECT_FILE_LIST_MAX_DEPTH,
+    excludedDirectories: [...PROJECT_FILE_LIST_EXCLUDED_DIRECTORIES].sort(),
+  };
+}
+
+function safeProjectRelativePath(projectPath: string, absolutePath: string): string | undefined {
+  const relativePath = relative(projectPath, absolutePath);
+  if (!relativePath || relativePath.startsWith("..") || isAbsolute(relativePath)) return undefined;
+  return relativePath.replaceAll("\\", "/");
 }
 
 async function getSafeFileDiff(projectPath: string, filePath: string): Promise<{ ok: true; diff: string; kind: "git" | "created" | "unavailable"; message: string | undefined }> {

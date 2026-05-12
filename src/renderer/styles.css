@@ -953,6 +953,20 @@ button {
   background: var(--background);
 }
 
+.chat-session-shell {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.chat-session-main {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .chat-header {
   display: flex;
   min-width: 0;
@@ -1805,6 +1819,86 @@ button {
   opacity: 0.48;
 }
 
+.composer-mention-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 14px 9px;
+}
+
+.composer-mention-chips button {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px 4px 8px;
+  border: 1px solid rgba(212, 212, 216, 0.34);
+  border-radius: 6px;
+  color: rgba(244, 244, 245, 0.9);
+  background: rgba(63, 63, 70, 0.34);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.composer-mention-chips button:hover {
+  border-color: rgba(244, 244, 245, 0.5);
+  background: rgba(82, 82, 91, 0.42);
+}
+
+.composer-mention-chips span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-mention-chips i {
+  color: rgba(212, 212, 216, 0.58);
+  font-style: normal;
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.mention-suggestions {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+  margin: 0 10px 8px;
+  padding: 6px;
+  border: 1px solid rgba(124, 134, 255, 0.22);
+  border-radius: 12px;
+  background: rgba(15, 15, 18, 0.96);
+}
+
+.mention-suggestions button {
+  display: grid;
+  gap: 1px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(244, 244, 245, 0.86);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.mention-suggestions button.active,
+.mention-suggestions button:hover {
+  background: rgba(124, 134, 255, 0.14);
+}
+
+.mention-suggestions small {
+  overflow: hidden;
+  color: rgba(161, 161, 170, 0.64);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
 .composer-footer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
@@ -2065,6 +2159,189 @@ button {
     max-width: none;
     flex: 1;
   }
+}
+
+.project-files-panel {
+  display: flex;
+  width: 292px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  flex-direction: column;
+  border-left: 1px solid rgba(255, 255, 255, 0.055);
+  background: #141416;
+}
+
+.project-files-panel.collapsed {
+  width: 38px;
+  align-items: center;
+  padding-top: 22px;
+}
+
+.project-files-collapse-button {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(161, 161, 170, 0.82);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+}
+
+.project-files-collapse-button span {
+  position: relative;
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.project-files-collapse-button span::before,
+.project-files-collapse-button span::after {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 999px;
+  background: currentColor;
+  content: "";
+}
+
+.project-files-collapse-button span::before {
+  left: 2px;
+}
+
+.project-files-collapse-button span::after {
+  right: 2px;
+}
+
+.project-files-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 12px 10px;
+}
+
+.project-files-header strong {
+  color: rgba(244, 244, 245, 0.82);
+  font-size: 12px;
+}
+
+.project-files-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.project-files-header button {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(161, 161, 170, 0.82);
+  background: rgba(255, 255, 255, 0.035);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.project-files-list {
+  display: grid;
+  align-content: start;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 8px 12px;
+}
+
+.project-file-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(212, 212, 216, 0.76);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.project-file-row:disabled {
+  cursor: default;
+}
+
+.project-file-row.kind-directory {
+  color: rgba(161, 161, 170, 0.58);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.project-file-chevron {
+  position: relative;
+  display: block;
+  width: 10px;
+  height: 10px;
+  overflow: visible;
+}
+
+.project-file-chevron::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-right: 1.25px solid rgba(161, 161, 170, 0.55);
+  border-bottom: 1.25px solid rgba(161, 161, 170, 0.55);
+  content: "";
+  transform: translate(-50%, -62%) rotate(45deg);
+  transform-origin: 50% 50%;
+  transition: 100ms transform, 100ms border-color;
+}
+
+.project-file-chevron.collapsed::before {
+  transform: translate(-58%, -50%) rotate(-45deg);
+}
+
+.project-file-row.kind-directory:hover .project-file-chevron::before {
+  border-color: rgba(244, 244, 245, 0.72);
+}
+
+.project-file-spacer {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+
+.project-file-row.kind-file:hover {
+  color: rgba(244, 244, 245, 0.96);
+  background: rgba(124, 134, 255, 0.12);
+}
+
+.project-file-row small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-files-error,
+.project-files-warning,
+.project-files-empty {
+  margin: 0 10px 10px;
+  padding: 8px;
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  border-radius: 10px;
+  color: rgba(254, 243, 199, 0.82);
+  background: rgba(251, 191, 36, 0.06);
+  font-size: 11px;
+}
+
+.project-files-empty {
+  border-color: rgba(255, 255, 255, 0.07);
+  color: rgba(161, 161, 170, 0.72);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .session-inspector {

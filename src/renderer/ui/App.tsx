@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import gpiIconUrl from "../assets/gpi-icon.svg";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
-import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
+import type { ChatMessage, ContinuityWorkflowStatus, GpiProject, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
   addOptimisticRealSession,
   addProjectToWorkspace,
@@ -31,6 +32,7 @@ import {
   toPersistedWorkspace,
   updateDraftInWorkspace,
   updateProjectInWorkspace,
+  updateProjectFilesPanelVisibleSetting,
   updateRevertSafeEditsSetting,
 } from "../state/workspace-store";
 
@@ -82,6 +84,24 @@ function applyRevertSafePromptPolicy(prompt: string, enabled: boolean): string {
   if (prompt.trimStart().startsWith("/")) return prompt;
   if (prompt.includes("[GPi Revert-Safe Editing Mode]")) return prompt;
   return `${REVERT_SAFE_PROMPT_PREFIX}\n${prompt}`;
+}
+
+function applyFileMentionPromptPolicy(prompt: string, files: GpiProjectFileEntry[]): string {
+  if (prompt.trimStart().startsWith("/")) return prompt;
+  const mentionedFiles = extractFileMentions(prompt, files);
+  if (mentionedFiles.length === 0) return prompt;
+  return [`[GPi Mentioned Project Files]`, ...mentionedFiles.map((file) => `- ${file.path}`), "", "User request:", prompt].join("\n");
+}
+
+function extractFileMentions(text: string, files: GpiProjectFileEntry[]): GpiProjectFileEntry[] {
+  const fileByPath = new Map(files.filter((file) => file.kind === "file").map((file) => [file.path, file]));
+  const found = new Map<string, GpiProjectFileEntry>();
+  for (const match of text.matchAll(/(?:^|\s)@([^\s]+)/g)) {
+    const rawPath = match[1]?.replace(/^['\"]|['\"]$/g, "");
+    const file = rawPath ? fileByPath.get(rawPath) : undefined;
+    if (file) found.set(file.path, file);
+  }
+  return [...found.values()];
 }
 
 const DEFAULT_APP_KEYBINDINGS = {
@@ -312,6 +332,9 @@ export function App() {
   const [workflowOnboardingStep, setWorkflowOnboardingStep] = useState<"install" | "intro" | "simulation">("intro");
   const [workflowSkillPreview, setWorkflowSkillPreview] = useState<{ name: WorkflowSkillName; text: string } | undefined>();
   const [workflowInstallStatus, setWorkflowInstallStatus] = useState<string | undefined>();
+  const [projectFiles, setProjectFiles] = useState<GpiProjectFileListing | undefined>();
+  const [projectFilesLoading, setProjectFilesLoading] = useState(false);
+  const [projectFilesError, setProjectFilesError] = useState<string | undefined>();
   const [updateStatus, setUpdateStatus] = useState<GpiUpdateStatus | undefined>();
   const [updateStatusLoading, setUpdateStatusLoading] = useState(false);
   const [startupMinElapsed, setStartupMinElapsed] = useState(false);
@@ -430,6 +453,27 @@ export function App() {
   useEffect(() => {
     workspaceRef.current = workspace;
   }, [workspace]);
+
+  useEffect(() => {
+    if (!window.gpi || !selectedProject) {
+      setProjectFiles(undefined);
+      return;
+    }
+    let cancelled = false;
+    setProjectFilesLoading(true);
+    setProjectFilesError(undefined);
+    void window.gpi.listProjectFiles(selectedProject.id).then((listing) => {
+      if (!cancelled) setProjectFiles(listing);
+    }).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!cancelled) setProjectFilesError(message);
+    }).finally(() => {
+      if (!cancelled) setProjectFilesLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedProject?.id]);
 
   useEffect(() => {
     if (!window.gpi || !workspaceLoaded) return;
@@ -1037,6 +1081,20 @@ export function App() {
     setWorkspace((current) => updateDraftInWorkspace(current, selectedSession.id, value));
   }
 
+  const insertFileMention = useCallback((path: string): void => {
+    window.dispatchEvent(new CustomEvent<{ path: string }>("gpi:file-mention-request", { detail: { path } }));
+  }, []);
+
+  function refreshProjectFiles(): void {
+    if (!window.gpi || !selectedProject) return;
+    setProjectFilesLoading(true);
+    setProjectFilesError(undefined);
+    void window.gpi.listProjectFiles(selectedProject.id).then(setProjectFiles).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      setProjectFilesError(message);
+    }).finally(() => setProjectFilesLoading(false));
+  }
+
   async function changeModel(value: string): Promise<void> {
     if (!window.gpi || !selectedBackendHandle) return;
     const separatorIndex = value.indexOf("/");
@@ -1064,13 +1122,14 @@ export function App() {
   }
 
   function sendPrompt(promptOverride?: string): void {
-    const prompt = promptOverride?.trim() ?? selectedDraft.trim();
-    if (!selectedSession || prompt.length === 0) return;
+    const rawPrompt = promptOverride?.trim() ?? selectedDraft.trim();
+    const prompt = applyFileMentionPromptPolicy(rawPrompt, projectFiles?.entries ?? []);
+    if (!selectedSession || rawPrompt.length === 0) return;
     const sessionId = selectedSession.id;
     const acceptedDetail = selectedSessionBusy ? "Pi follow-up queued" : selectedBackendHandle || selectedSessionFile ? "Pi prompt sent" : "mock event: agent_start";
     const acceptedActivity = selectedSessionBusy ? "Follow-up queued" : selectedBackendHandle || selectedSessionFile ? "Pi prompt accepted" : "Prompt accepted";
     setWorkspace((current) => {
-      const accepted = markPromptAccepted(current, sessionId, prompt, acceptedDetail, acceptedActivity);
+      const accepted = markPromptAccepted(current, sessionId, rawPrompt, acceptedDetail, acceptedActivity);
       return current.settings.revertSafeEditsEnabled && !prompt.trimStart().startsWith("/") ? markRevertSafeTurn(accepted, sessionId) : accepted;
     });
 
@@ -1359,53 +1418,69 @@ export function App() {
           <WindowControls updateStatus={updateStatus} updateStatusLoading={updateStatusLoading} onOpenSettings={() => setSettingsOpen(true)} />
         </header>
 
-        <MessageTimeline
-          bridgeError={bridgeError}
-          details={selectedDetails}
-          hasSelectedProject={Boolean(selectedProject)}
-          projectId={selectedProject?.id}
-          messages={selectedMessages}
-          timelineEvents={selectedTimelineEvents}
-          turnSnapshots={workspace.turnSnapshots}
-          selectedSessionId={selectedSession?.id}
-          onPreviewRevert={(snapshot) => void openRevertPreview(snapshot)}
-          onCreateSession={() => void createRealPiSession(selectedProject)}
-          selectedSessionStatus={selectedSession?.status}
-        />
+        <div className="chat-session-shell">
+          <div className="chat-session-main">
+            <MessageTimeline
+              bridgeError={bridgeError}
+              details={selectedDetails}
+              hasSelectedProject={Boolean(selectedProject)}
+              projectId={selectedProject?.id}
+              messages={selectedMessages}
+              timelineEvents={selectedTimelineEvents}
+              turnSnapshots={workspace.turnSnapshots}
+              selectedSessionId={selectedSession?.id}
+              onPreviewRevert={(snapshot) => void openRevertPreview(snapshot)}
+              onCreateSession={() => void createRealPiSession(selectedProject)}
+              selectedSessionStatus={selectedSession?.status}
+            />
 
-        {selectedSession ? (
-        <Composer
-          disabled={false}
-          draft={selectedDraft}
-          hasRealHandle={Boolean(selectedBackendHandle)}
-          isBusy={selectedSessionBusy}
-          isCompacting={selectedSessionCompacting}
-          modelOptions={selectedModelOptions}
-          selectedSession={selectedSession}
-          sessionStats={selectedSessionStats}
-          onAbort={() => void abortSelectedRun()}
-          onAbortCompaction={() => void abortSelectedCompaction()}
-          onCompact={() => void compactSelectedSession()}
-          onChange={updateDraft}
-          onModelChange={(value) => void changeModel(value)}
-          onSend={() => sendPrompt()}
-          onThinkingChange={(value) => void changeThinkingLevel(value)}
-          workflowLabel={workflowLabel()}
-          focusKey={selectedSession?.id}
-          showPlanRefinement={shouldShowPlanRefinementButton()}
-          revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
-          shouldAutoFocus={!quickSwitcherOpen && !confirmDialog && !workflowOnboardingOpen && !settingsOpen}
-          onPlanRefinement={() => sendPlanWorkflowPrompt()}
-          onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
-          onWorkflowAction={runComposerWorkflowAction}
-        />
-        ) : null}
+            {selectedSession ? (
+              <Composer
+                disabled={false}
+                draft={selectedDraft}
+                hasRealHandle={Boolean(selectedBackendHandle)}
+                isBusy={selectedSessionBusy}
+                isCompacting={selectedSessionCompacting}
+                modelOptions={selectedModelOptions}
+                selectedSession={selectedSession}
+                sessionStats={selectedSessionStats}
+                onAbort={() => void abortSelectedRun()}
+                onAbortCompaction={() => void abortSelectedCompaction()}
+                onCompact={() => void compactSelectedSession()}
+                onChange={updateDraft}
+                onModelChange={(value) => void changeModel(value)}
+                onSend={(draft) => sendPrompt(draft)}
+                onThinkingChange={(value) => void changeThinkingLevel(value)}
+                workflowLabel={workflowLabel()}
+                focusKey={selectedSession?.id}
+                showPlanRefinement={shouldShowPlanRefinementButton()}
+                revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
+                shouldAutoFocus={!quickSwitcherOpen && !confirmDialog && !workflowOnboardingOpen && !settingsOpen}
+                onPlanRefinement={() => sendPlanWorkflowPrompt()}
+                onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
+                projectFiles={projectFiles?.entries ?? []}
+                onWorkflowAction={runComposerWorkflowAction}
+              />
+            ) : null}
+          </div>
+
+          {workspace.settings.projectFilesPanelVisible ? (
+            <ProjectFilesPanel
+              error={projectFilesError}
+              listing={projectFiles}
+              loading={projectFilesLoading}
+              onFileClick={insertFileMention}
+              onRefresh={refreshProjectFiles}
+            />
+          ) : null}
+        </div>
       </section>
 
       {confirmDialog ? <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(undefined)} /> : null}
       {revertPreview ? <RevertPreviewDialog onApply={() => void applyRevertPreview(revertPreview)} preview={revertPreview} onClose={() => setRevertPreview(undefined)} /> : null}
       {settingsOpen ? (
         <SettingsDialog
+          projectFilesPanelVisible={workspace.settings.projectFilesPanelVisible}
           revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
           gpiUpdateDownloading={gpiUpdateDownloading}
           gpiUpdateInstallerReady={Boolean(gpiUpdateInstallerPath)}
@@ -1421,6 +1496,7 @@ export function App() {
           onCloseWorkflowPreview={() => setWorkflowSkillPreview(undefined)}
           onInstallWorkflowSkills={() => void installWorkflowSkills()}
           onPreviewWorkflowSkill={(skillName) => void previewWorkflowSkill(skillName)}
+          onProjectFilesPanelVisibleChange={(visible) => setWorkspace((current) => updateProjectFilesPanelVisibleSetting(current, visible))}
           onRefreshWorkflowSkills={() => void refreshSettingsStatus()}
           onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
           onUpdateGpi={() => void updateGpiFromSettings()}
@@ -1572,6 +1648,89 @@ function startupSplashPhase(props: { error: string | undefined; workspaceLoaded:
   return "Ready";
 }
 
+const ProjectFilesPanel = memo(function ProjectFilesPanel(props: { error: string | undefined; listing: GpiProjectFileListing | undefined; loading: boolean; onFileClick: (path: string) => void; onRefresh: () => void }) {
+  const entries = props.listing?.entries ?? [];
+  const initializedProjectId = useRef<string | undefined>(undefined);
+  const [collapsed, setCollapsed] = useState(false);
+  const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(new Set());
+  const visibleEntries = useMemo(() => visibleProjectFileEntries(entries, expandedDirectories).slice(0, 450), [entries, expandedDirectories]);
+
+  useEffect(() => {
+    if (!props.listing || initializedProjectId.current === props.listing.projectId) return;
+    initializedProjectId.current = props.listing.projectId;
+    setExpandedDirectories(new Set(entries.filter((entry) => entry.kind === "directory").map((entry) => entry.path)));
+  }, [entries, props.listing]);
+
+  function toggleDirectory(path: string): void {
+    setExpandedDirectories((current) => {
+      const next = new Set(current);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  }
+
+  if (collapsed) {
+    return (
+      <aside className="project-files-panel collapsed">
+        <button className="project-files-collapse-button" onClick={() => setCollapsed(false)} title="Open project files" type="button" aria-label="Open project files">
+          <span aria-hidden="true" />
+        </button>
+      </aside>
+    );
+  }
+  return (
+    <aside className="project-files-panel">
+      <div className="project-files-header">
+        <div>
+          <span className="eyebrow">Project files</span>
+          <strong>{props.loading ? "Loading..." : `${entries.length.toString()} entries`}</strong>
+        </div>
+        <div className="project-files-header-actions">
+          <button onClick={props.onRefresh} title="Refresh project files" type="button">Refresh</button>
+          <button onClick={() => setCollapsed(true)} title="Collapse project files" type="button">Hide</button>
+        </div>
+      </div>
+      {props.error ? <div className="project-files-error">{props.error}</div> : null}
+      {props.listing?.truncated ? <div className="project-files-warning">Project list was truncated at {props.listing.maxEntries.toString()} entries.</div> : null}
+      {entries.length > visibleEntries.length ? <div className="project-files-warning">Showing {visibleEntries.length.toString()} of {entries.length.toString()} entries. Type @ to search all files.</div> : null}
+      <div className="project-files-list">
+        {entries.length === 0 && !props.loading ? <div className="project-files-empty">No project files found.</div> : null}
+        {visibleEntries.map((entry) => (
+          <button
+            className={`project-file-row kind-${entry.kind}`}
+            key={entry.path}
+            onClick={() => entry.kind === "directory" ? toggleDirectory(entry.path) : props.onFileClick(entry.path)}
+            style={{ paddingLeft: `${(10 + Math.min(entry.depth, 8) * 9).toString()}px` }}
+            title={entry.kind === "file" ? `Insert @${entry.path}` : entry.path}
+            type="button"
+          >
+            <span className={entry.kind === "directory" && !expandedDirectories.has(entry.path) ? "project-file-chevron collapsed" : entry.kind === "directory" ? "project-file-chevron" : "project-file-spacer"} aria-hidden="true" />
+            <small>{entry.name}</small>
+          </button>
+        ))}
+      </div>
+    </aside>
+  );
+}, (previous, next) => previous.error === next.error && previous.loading === next.loading && previous.listing === next.listing);
+
+function visibleProjectFileEntries(entries: GpiProjectFileEntry[], expandedDirectories: Set<string>): GpiProjectFileEntry[] {
+  return entries.filter((entry) => {
+    const ancestors = projectPathAncestors(entry.path);
+    return ancestors.every((ancestor) => expandedDirectories.has(ancestor));
+  });
+}
+
+function projectPathAncestors(path: string): string[] {
+  const parts = path.split("/");
+  if (parts.length <= 1) return [];
+  const ancestors: string[] = [];
+  for (let index = 1; index < parts.length; index += 1) {
+    ancestors.push(parts.slice(0, index).join("/"));
+  }
+  return ancestors;
+}
+
 type PiInstallTab = "curl" | "npm" | "pnpm" | "bun";
 
 const PI_INSTALL_COMMANDS: Record<PiInstallTab, { label: string; command: string }> = {
@@ -1673,6 +1832,7 @@ function PiInstallOnboardingDialog(props: { onClose: () => void }) {
 }
 
 function SettingsDialog(props: {
+  projectFilesPanelVisible: boolean;
   revertSafeEditsEnabled: boolean;
   gpiUpdateDownloading: boolean;
   gpiUpdateInstallerReady: boolean;
@@ -1688,13 +1848,14 @@ function SettingsDialog(props: {
   onCloseWorkflowPreview: () => void;
   onInstallWorkflowSkills: () => void;
   onPreviewWorkflowSkill: (skillName: WorkflowSkillName) => void;
+  onProjectFilesPanelVisibleChange: (visible: boolean) => void;
   onRefreshWorkflowSkills: () => void;
   onRevertSafeEditsChange: (enabled: boolean) => void;
   onUpdateGpi: () => void;
   onUpdatePi: () => void;
   onUpdateWorkflowSkills: () => void;
 }) {
-  const [activeSection, setActiveSection] = useState<"onboarding" | "revert" | "updates">("revert");
+  const [activeSection, setActiveSection] = useState<"interface" | "onboarding" | "revert" | "updates">("revert");
   const missingCount = props.workflowStatus?.skills.filter((skill) => skill.status === "missing").length ?? 0;
   const conflictCount = props.workflowStatus?.skills.filter((skill) => skill.status === "conflict").length ?? 0;
   const allInstalled = Boolean(props.workflowStatus && props.workflowStatus.skills.every((skill) => skill.status === "installed"));
@@ -1734,6 +1895,11 @@ function SettingsDialog(props: {
             <button className={activeSection === "revert" ? "session-row selected settings-section-row" : "session-row settings-section-row"} onClick={() => setActiveSection("revert")} type="button">
               <span />
               <span className="session-copy"><strong>Revert</strong><small>Prompt policy and snapshots</small></span>
+              <span className="session-meta-stack" />
+            </button>
+            <button className={activeSection === "interface" ? "session-row selected settings-section-row" : "session-row settings-section-row"} onClick={() => setActiveSection("interface")} type="button">
+              <span />
+              <span className="session-copy"><strong>Interface</strong><small>Panels and UI toggles</small></span>
               <span className="session-meta-stack" />
             </button>
             <button className={activeSection === "onboarding" ? "session-row selected settings-section-row" : "session-row settings-section-row"} onClick={() => setActiveSection("onboarding")} type="button">
@@ -1790,6 +1956,20 @@ function SettingsDialog(props: {
                     <button className="settings-primary-button" disabled={props.piUpdateRunning} onClick={props.onUpdatePi} title="Run pi update" type="button">{props.piUpdateRunning ? "Updating Pi..." : "Update Pi"}</button>
                   ) : null}
                 </div>
+              </section>
+            ) : null}
+
+            {activeSection === "interface" ? (
+              <section className="settings-card">
+                <div className="settings-card-heading">
+                  <span>Interface</span>
+                  <strong>Workspace panels</strong>
+                </div>
+                <p>Control optional UI surfaces in the workspace. Future interface toggles will live here.</p>
+                <label className="settings-toggle-row">
+                  <span><strong>Project file tree</strong><small>Show the read-only project file panel used for file mentions.</small></span>
+                  <button className={props.projectFilesPanelVisible ? "settings-toggle active" : "settings-toggle"} onClick={() => props.onProjectFilesPanelVisibleChange(!props.projectFilesPanelVisible)} type="button">{props.projectFilesPanelVisible ? "On" : "Off"}</button>
+                </label>
               </section>
             ) : null}
 
@@ -1881,13 +2061,15 @@ function formatPiUpdateStatus(status: GpiUpdateStatus | undefined, loading: bool
   return `${status.piPackageName} · ${installed} · ${latest} · ${update} · ${status.piUpdateCommand}`;
 }
 
-function settingsSectionTitle(section: "onboarding" | "revert" | "updates"): string {
+function settingsSectionTitle(section: "interface" | "onboarding" | "revert" | "updates"): string {
+  if (section === "interface") return "Interface";
   if (section === "onboarding") return "Onboarding";
   if (section === "updates") return "Updates";
   return "Revert";
 }
 
-function settingsSectionSubtitle(section: "onboarding" | "revert" | "updates"): string {
+function settingsSectionSubtitle(section: "interface" | "onboarding" | "revert" | "updates"): string {
+  if (section === "interface") return "Panels and UI toggles";
   if (section === "onboarding") return "Continuity skills and updates";
   if (section === "updates") return "GPi and Pi.dev local status";
   return "Message revert and prompt injection";
@@ -3151,6 +3333,7 @@ function Composer(props: {
   isBusy: boolean;
   isCompacting: boolean;
   modelOptions: GpiModelOptions | undefined;
+  projectFiles: GpiProjectFileEntry[];
   selectedSession: GpiSessionSummary | undefined;
   sessionStats: string | undefined;
   onAbort: () => void;
@@ -3158,7 +3341,7 @@ function Composer(props: {
   onChange: (value: string) => void;
   onCompact: () => void;
   onModelChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (draft: string) => void;
   onThinkingChange: (value: string) => void;
   workflowLabel: string;
   focusKey: string | undefined;
@@ -3170,23 +3353,95 @@ function Composer(props: {
   onWorkflowAction: () => void;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [localDraft, setLocalDraft] = useState(props.draft);
+  const [mentionChipPaths, setMentionChipPaths] = useState<string[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | undefined>();
+  const [mentionIndex, setMentionIndex] = useState(0);
   const currentModelValue = props.modelOptions?.currentModel ? `${props.modelOptions.currentModel.provider}/${props.modelOptions.currentModel.id}` : "";
   const models = selectableModels(props.modelOptions);
   const canSelectModel = props.hasRealHandle && !props.isBusy && models.length > 0;
   const canSelectThinking = props.hasRealHandle && !props.isBusy && Boolean(props.modelOptions?.supportsThinking);
   const composerStatus = props.isCompacting ? "Compacting" : props.isBusy ? "Running - Enter queues follow-up" : props.hasRealHandle ? "Pi SDK connected" : props.selectedSession ? `${originLabels[props.selectedSession.origin]} session` : "No active session";
+  const mentionIndexEntries = useMemo(() => props.projectFiles.filter((file) => file.kind === "file"), [props.projectFiles]);
+  const mentionSuggestions = useMemo(() => mentionQuery === undefined ? [] : findFileMentionSuggestions(mentionIndexEntries, mentionQuery), [mentionQuery, mentionIndexEntries]);
 
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "0px";
     textarea.style.height = `${Math.min(textarea.scrollHeight, 190).toString()}px`;
-  }, [props.draft]);
+  }, [localDraft]);
+
+  useEffect(() => {
+    setLocalDraft(props.draft);
+    setMentionChipPaths([]);
+    setMentionQuery(undefined);
+  }, [props.focusKey]);
+
+  useEffect(() => {
+    function handleFileMentionRequest(event: Event): void {
+      const detail = (event as CustomEvent<{ path?: string }>).detail;
+      if (detail?.path) appendMentionToDraft(detail.path);
+    }
+    window.addEventListener("gpi:file-mention-request", handleFileMentionRequest);
+    return () => window.removeEventListener("gpi:file-mention-request", handleFileMentionRequest);
+  }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (localDraft !== props.draft) props.onChange(localDraft);
+    }, 180);
+    return () => window.clearTimeout(handle);
+  }, [localDraft, props.draft, props.onChange]);
 
   useEffect(() => {
     if (!props.shouldAutoFocus || props.disabled) return;
     window.requestAnimationFrame(() => textareaRef.current?.focus());
   }, [props.focusKey, props.disabled, props.shouldAutoFocus]);
+
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionQuery]);
+
+  function updateComposerValue(value: string, cursor: number): void {
+    setLocalDraft(value);
+    const nextMentionQuery = activeMentionQuery(value, cursor);
+    setMentionQuery((current) => current === nextMentionQuery ? current : nextMentionQuery);
+  }
+
+  function addMentionChip(path: string): void {
+    setMentionChipPaths((current) => current.includes(path) ? current : [...current, path]);
+  }
+
+  function promptWithMentionChips(): string {
+    const chipMentions = mentionChipPaths.map((path) => `@${path}`).join(" ");
+    return [chipMentions, localDraft.trim()].filter((part) => part.length > 0).join(" ");
+  }
+
+  function appendMentionToDraft(path: string): void {
+    const textarea = textareaRef.current;
+    flushSync(() => {
+      addMentionChip(path);
+      setMentionQuery(undefined);
+    });
+    textarea?.focus();
+  }
+
+  function insertMention(path: string): void {
+    const textarea = textareaRef.current;
+    const cursor = textarea?.selectionStart ?? localDraft.length;
+    const token = activeMentionToken(localDraft, cursor);
+    if (!token) return;
+    const next = `${localDraft.slice(0, token.start)}${localDraft.slice(cursor)}`.replace(/ {2,}/g, " ");
+    flushSync(() => {
+      setLocalDraft(next);
+      addMentionChip(path);
+      props.onChange(next);
+      setMentionQuery(undefined);
+    });
+    textarea?.focus();
+    textarea?.setSelectionRange(token.start, token.start);
+  }
 
   return (
     <footer className="composer-region">
@@ -3194,18 +3449,63 @@ function Composer(props: {
         <textarea
           aria-label="Prompt"
           disabled={props.disabled}
-          onChange={(event) => props.onChange(event.target.value)}
+          onChange={(event) => updateComposerValue(event.target.value, event.target.selectionStart)}
+          onClick={(event) => setMentionQuery(activeMentionQuery(localDraft, event.currentTarget.selectionStart))}
           ref={textareaRef}
           onKeyDown={(event) => {
+            if (mentionSuggestions.length > 0 && mentionQuery !== undefined) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setMentionIndex((current) => (current + 1) % mentionSuggestions.length);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setMentionIndex((current) => (current - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setMentionQuery(undefined);
+                return;
+              }
+              if (event.key === "Enter") {
+                event.preventDefault();
+                insertMention(mentionSuggestions[mentionIndex]?.path ?? mentionSuggestions[0]?.path ?? "");
+                return;
+              }
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              props.onSend();
+              const prompt = promptWithMentionChips();
+              props.onChange(prompt);
+              props.onSend(prompt);
             }
           }}
           placeholder="Ask Pi to inspect, change, explain, or plan..."
           rows={3}
-          value={props.draft}
+          value={localDraft}
         />
+        {mentionChipPaths.length > 0 ? (
+          <div className="composer-mention-chips">
+            {mentionChipPaths.map((path) => (
+              <button key={path} onClick={() => setMentionChipPaths((current) => current.filter((item) => item !== path))} title={`Remove ${path}`} type="button">
+                <span>{path}</span>
+                <i aria-hidden="true">×</i>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {mentionSuggestions.length > 0 ? (
+          <div className="mention-suggestions">
+            {mentionSuggestions.map((file, index) => (
+              <button className={index === mentionIndex ? "active" : ""} key={file.path} onMouseDown={(event) => event.preventDefault()} onClick={() => insertMention(file.path)} type="button">
+                <span>{file.name}</span>
+                <small>{file.path}</small>
+              </button>
+            ))}
+          </div>
+        ) : null}
         <div className="composer-footer">
           <div className="composer-context">
             <span>{props.selectedSession?.title ?? "No session selected"}</span>
@@ -3244,7 +3544,11 @@ function Composer(props: {
           <div className="composer-controls">
             {props.isCompacting && props.hasRealHandle ? <button className="abort-button" onClick={props.onAbortCompaction} title="Abort compaction" type="button">Abort compact</button> : null}
             {props.isBusy && props.hasRealHandle && !props.isCompacting ? <button className="abort-button" onClick={props.onAbort} title="Abort the running Pi turn" type="button">Abort</button> : null}
-            <button className="send-button" disabled={props.disabled || props.isCompacting || props.draft.trim().length === 0} onClick={props.onSend} title={props.isCompacting ? "Wait for compaction to finish" : props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
+            <button className="send-button" disabled={props.disabled || props.isCompacting || (localDraft.trim().length === 0 && mentionChipPaths.length === 0)} onClick={() => {
+              const prompt = promptWithMentionChips();
+              props.onChange(prompt);
+              props.onSend(prompt);
+            }} title={props.isCompacting ? "Wait for compaction to finish" : props.isBusy && props.hasRealHandle ? "Queue this as a follow-up" : "Send prompt to Pi"} type="button">
               {props.isBusy && props.hasRealHandle && !props.isCompacting ? "Follow up" : "Send"}
             </button>
           </div>
@@ -3253,6 +3557,41 @@ function Composer(props: {
       </div>
     </footer>
   );
+}
+
+function activeMentionToken(text: string, cursor: number): { start: number; query: string } | undefined {
+  const beforeCursor = text.slice(0, cursor);
+  const match = /(^|\s)@([^\s]*)$/.exec(beforeCursor);
+  if (!match) return undefined;
+  return { start: beforeCursor.length - (match[2]?.length ?? 0) - 1, query: match[2] ?? "" };
+}
+
+function activeMentionQuery(text: string, cursor: number): string | undefined {
+  return activeMentionToken(text, cursor)?.query;
+}
+
+function findFileMentionSuggestions(files: GpiProjectFileEntry[], query: string): GpiProjectFileEntry[] {
+  const normalizedQuery = query.toLowerCase();
+  const exact: GpiProjectFileEntry[] = [];
+  const namePrefix: GpiProjectFileEntry[] = [];
+  const pathPrefix: GpiProjectFileEntry[] = [];
+  const contains: GpiProjectFileEntry[] = [];
+
+  for (const file of files) {
+    if (normalizedQuery.length === 0) {
+      namePrefix.push(file);
+    } else {
+      const name = file.name.toLowerCase();
+      const path = file.path.toLowerCase();
+      if (name === normalizedQuery) exact.push(file);
+      else if (name.startsWith(normalizedQuery)) namePrefix.push(file);
+      else if (path.startsWith(normalizedQuery)) pathPrefix.push(file);
+      else if (path.includes(normalizedQuery)) contains.push(file);
+    }
+    if (exact.length + namePrefix.length + pathPrefix.length + contains.length >= 24) break;
+  }
+
+  return [...exact, ...namePrefix, ...pathPrefix, ...contains].slice(0, 8);
 }
 
 function workflowButtonTitle(label: string, hasSeparatePlanButton: boolean): string {

@@ -2,7 +2,7 @@
 
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -38,6 +38,7 @@ interface GpiPreloadApi {
   chooseProjectPath(): Promise<{ path: string | undefined }>;
   validateProjectPath(projectPath: string): Promise<{ ok: boolean; error: string | undefined }>;
   listProjectSessions(projectId: string): Promise<GpiDiscoveredSession[]>;
+  listProjectFiles(projectId: string): Promise<GpiProjectFileListing>;
   getPrewarmStatus(): Promise<SdkPiBridgePrewarmSnapshot>;
   getFileDiff(projectId: string, filePath: string): Promise<{ ok: true; diff: string; kind: "git" | "created" | "unavailable"; message: string | undefined }>;
   getModelOptions(sessionHandleId: string): Promise<GpiModelOptions>;

@@ -48,6 +48,25 @@ export interface GpiWorkspaceSnapshot {
   selectedSessionId: string;
 }
 
+export interface GpiProjectFileEntry {
+  path: string;
+  name: string;
+  kind: "directory" | "file";
+  depth: number;
+  size: number | undefined;
+  modifiedAt: number | undefined;
+}
+
+export interface GpiProjectFileListing {
+  projectId: string;
+  projectPath: string;
+  entries: GpiProjectFileEntry[];
+  truncated: boolean;
+  maxEntries: number;
+  maxDepth: number;
+  excludedDirectories: string[];
+}
+
 export interface ChatMessage {
   id: string;
   role: "user" | "assistant";
@@ -227,6 +246,7 @@ export type TurnSnapshotRevertResult =
 
 export interface WorkspaceSettings {
   revertSafeEditsEnabled: boolean;
+  projectFilesPanelVisible: boolean;
   piInstallOnboardingSeen: boolean;
   lastSeenAppVersion: string | undefined;
 }

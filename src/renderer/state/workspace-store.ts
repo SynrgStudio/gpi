@@ -35,7 +35,7 @@ export const initialWorkspace: WorkspaceState = {
   archivedSessions: {},
   sessionSelectionRanks: {},
   turnSnapshots: {},
-  settings: { revertSafeEditsEnabled: false, piInstallOnboardingSeen: false, lastSeenAppVersion: undefined },
+  settings: { revertSafeEditsEnabled: false, projectFilesPanelVisible: true, piInstallOnboardingSeen: false, lastSeenAppVersion: undefined },
 };
 
 export function hydrateWorkspace(persisted: Partial<WorkspaceState> | undefined): WorkspaceState {
@@ -65,6 +65,10 @@ export function hydrateWorkspace(persisted: Partial<WorkspaceState> | undefined)
 
 export function updateRevertSafeEditsSetting(workspace: WorkspaceState, enabled: boolean): WorkspaceState {
   return { ...workspace, settings: { ...workspace.settings, revertSafeEditsEnabled: enabled } };
+}
+
+export function updateProjectFilesPanelVisibleSetting(workspace: WorkspaceState, visible: boolean): WorkspaceState {
+  return { ...workspace, settings: { ...workspace.settings, projectFilesPanelVisible: visible } };
 }
 
 export function markRevertSafeTurn(workspace: WorkspaceState, _sessionId: string): WorkspaceState {

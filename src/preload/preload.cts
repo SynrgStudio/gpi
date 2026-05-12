@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiOpenExternalResult, GpiPiUpdateResult, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("gpi", {
   chooseProjectPath: () => ipcRenderer.invoke("gpi:choose-project-path") as Promise<{ path: string | undefined }>,
   validateProjectPath: (projectPath: string) => ipcRenderer.invoke("gpi:validate-project-path", projectPath) as Promise<{ ok: boolean; error: string | undefined }>,
   listProjectSessions: (projectId: string) => ipcRenderer.invoke("gpi:list-project-sessions", projectId) as Promise<GpiDiscoveredSession[]>,
+  listProjectFiles: (projectId: string) => ipcRenderer.invoke("gpi:list-project-files", projectId) as Promise<GpiProjectFileListing>,
   getPrewarmStatus: () => ipcRenderer.invoke("gpi:get-prewarm-status") as Promise<SdkPiBridgePrewarmSnapshot>,
   getFileDiff: (projectId: string, filePath: string) => ipcRenderer.invoke("gpi:get-file-diff", projectId, filePath) as Promise<{ ok: true; diff: string; kind: "git" | "created" | "unavailable"; message: string | undefined }>,
   getModelOptions: (sessionHandleId: string) => ipcRenderer.invoke("gpi:get-model-options", sessionHandleId) as Promise<GpiModelOptions>,
