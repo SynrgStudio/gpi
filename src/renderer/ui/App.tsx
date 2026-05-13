@@ -944,7 +944,9 @@ export function App() {
   }
 
   function shouldShowPlanRefinementButton(): boolean {
-    return Boolean(workflowSkillsReady() && continuityStatus?.phase === "executable" && hasContinuityWorkStarted());
+    if (!workflowSkillsReady() || !continuityStatus) return false;
+    if (continuityStatus.phase === "complete") return true;
+    return continuityStatus.phase === "executable" && hasContinuityWorkStarted();
   }
 
   function workflowLabel(): string {
@@ -3849,7 +3851,7 @@ function Composer(props: {
             <span>{composerStatus}</span>
           </div>
           <div className="composer-model-controls">
-            {props.showPlanRefinement ? <button className="mode-button" onClick={props.onPlanRefinement} title="Refine the active continuity plan or add more tasks before continuing execution" type="button">Plan</button> : null}
+            {props.showPlanRefinement ? <button className="mode-button" onClick={props.onPlanRefinement} title="Refine the active continuity plan or add more tasks before continuing or finalizing" type="button">Plan</button> : null}
             <button className="mode-button" onClick={props.onWorkflowAction} title={workflowButtonTitle(props.workflowLabel, props.showPlanRefinement)} type="button">{props.workflowLabel}</button>
             <button
               className={props.revertSafeEditsEnabled ? "revert-safe-toggle active" : "revert-safe-toggle"}

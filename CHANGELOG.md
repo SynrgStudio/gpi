@@ -24,6 +24,27 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.13] - 2026-05-13
+### Added
+
+- None.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- Added a Plan action alongside End when a continuity queue is complete, so completed sessions can be extended without manually typing `/plan-cont`.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.12] - 2026-05-13
 ### Added
 

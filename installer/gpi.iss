@@ -4,7 +4,7 @@
 #define MyAppExeName "GPi.exe"
 #define MyAppVersion GetEnv("GPI_VERSION")
 #if MyAppVersion == ""
-  #define MyAppVersion "0.0.12"
+  #define MyAppVersion "0.0.13"
 #endif
 
 [Setup]
