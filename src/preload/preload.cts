@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge.js";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiOpenProjectRequest, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types.js";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld("gpi", {
   revertTurnSnapshot: (manifestPath: string) => ipcRenderer.invoke("gpi:revert-turn-snapshot", manifestPath) as Promise<TurnSnapshotRevertResult>,
   chooseProjectPath: () => ipcRenderer.invoke("gpi:choose-project-path") as Promise<{ path: string | undefined }>,
   validateProjectPath: (projectPath: string) => ipcRenderer.invoke("gpi:validate-project-path", projectPath) as Promise<{ ok: boolean; error: string | undefined }>,
+  getInitialOpenProjectRequest: () => ipcRenderer.invoke("gpi:get-initial-open-project-request") as Promise<GpiOpenProjectRequest | undefined>,
   listProjectSessions: (projectId: string) => ipcRenderer.invoke("gpi:list-project-sessions", projectId) as Promise<GpiDiscoveredSession[]>,
   listProjectFiles: (projectId: string) => ipcRenderer.invoke("gpi:list-project-files", projectId) as Promise<GpiProjectFileListing>,
   getProjectContext: (projectId: string) => ipcRenderer.invoke("gpi:get-project-context", projectId) as Promise<GpiProjectContext>,
@@ -59,6 +60,11 @@ contextBridge.exposeInMainWorld("gpi", {
   followUp: (sessionHandleId: string, text: string, images?: GpiImageAttachment[]) => ipcRenderer.invoke("gpi:follow-up", sessionHandleId, text, images) as Promise<{ ok: true }>,
   steer: (sessionHandleId: string, text: string, images?: GpiImageAttachment[]) => ipcRenderer.invoke("gpi:steer", sessionHandleId, text, images) as Promise<{ ok: true }>,
   abort: (sessionHandleId: string) => ipcRenderer.invoke("gpi:abort", sessionHandleId) as Promise<{ ok: true }>,
+  onOpenProjectRequest: (listener: (request: GpiOpenProjectRequest) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, request: GpiOpenProjectRequest) => listener(request);
+    ipcRenderer.on("gpi:open-project-request", handler);
+    return () => ipcRenderer.off("gpi:open-project-request", handler);
+  },
   onPiEvent: (listener: (event: GpiPiEvent) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, piEvent: GpiPiEvent) => listener(piEvent);
     ipcRenderer.on("gpi:pi-event", handler);

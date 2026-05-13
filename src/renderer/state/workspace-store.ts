@@ -152,6 +152,17 @@ export function selectProjectInWorkspace(workspace: WorkspaceState, projectId: s
   };
 }
 
+export function selectOrAddProjectByPath(workspace: WorkspaceState, project: { id: string; name: string; path: string }): WorkspaceState {
+  const existingProject = workspace.projects.find((candidate) => normalizedProjectPath(candidate.path) === normalizedProjectPath(project.path));
+  if (!existingProject) return addProjectToWorkspace(workspace, project);
+
+  return {
+    ...workspace,
+    selectedProjectId: existingProject.id,
+    selectedSessionId: mostRecentlySelectedVisibleSessionId(existingProject.sessionIds, workspace.archivedSessions, workspace.sessionSelectionRanks),
+  };
+}
+
 export function renameSessionInWorkspace(workspace: WorkspaceState, sessionId: string, title: string): WorkspaceState {
   const trimmedTitle = title.trim();
   if (trimmedTitle.length === 0) return workspace;
@@ -513,6 +524,16 @@ function truncateText(text: string, maxLength: number): string {
 
 function firstVisibleSessionId(sessionIds: string[], archivedSessions: Record<string, boolean>): string {
   return sessionIds.find((sessionId) => !archivedSessions[sessionId]) ?? "";
+}
+
+function mostRecentlySelectedVisibleSessionId(sessionIds: string[], archivedSessions: Record<string, boolean>, selectionRanks: Record<string, number>): string {
+  const visibleSessionIds = sessionIds.filter((sessionId) => !archivedSessions[sessionId]);
+  if (visibleSessionIds.length === 0) return "";
+  return [...visibleSessionIds].sort((left, right) => (selectionRanks[right] ?? 0) - (selectionRanks[left] ?? 0))[0] ?? visibleSessionIds[0] ?? "";
+}
+
+function normalizedProjectPath(path: string): string {
+  return path.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 }
 
 function appendStreamingDelta(messages: SessionMessages, sessionId: string, delta: string): SessionMessages {

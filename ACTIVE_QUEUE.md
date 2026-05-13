@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-12 05:35
+updated_at: 2026-05-13 03:15
 planned_at: 2026-05-10 16:45
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
@@ -281,10 +281,10 @@ Notes:
 
 ### T010 — Add Windows Open in GPi context-menu installer option
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-13 02:55
+Last update: 2026-05-13 03:15
 Scope:
 - Add optional Inno Setup task for folder context menu action `Open in GPi`.
 - Register/unregister appropriate HKCU registry keys.
@@ -303,13 +303,18 @@ Depends on:
 - none
 Notes:
 - Keep per-user install compatible with current `PrivilegesRequired=lowest`.
+- Added optional `openwithgpi` Inno task and HKCU registry entries for folder and folder-background context menus.
+- Direct Inno Setup compile succeeded and produced `release/installer/GPi-Setup-0.0.11.exe`.
+- Validation: `npm run check`.
+- User manually validated: installer/context menu works when opening a folder that already exists as a GPi project.
+- User manually validated: context menu works when opening a folder that is not a repo and not yet a GPi project.
 
 ### T011 — Support launch/open folder argument in GPi
 
-Status: pending
-Claimed by:
-Started:
-Last update:
+Status: done
+Claimed by: pi
+Started: 2026-05-13 03:00
+Last update: 2026-05-13 03:15
 Scope:
 - Main process captures folder path argument.
 - Renderer/workspace can select existing project by path.
@@ -334,6 +339,11 @@ Depends on:
 - T010
 Notes:
 - Single-instance lock is important for context menu UX.
+- Added single-instance folder open request handling for first launch and second-instance activation.
+- Existing projects are selected by normalized folder path and use the most recently selected visible session; unknown folders create a project named from the folder and no session.
+- Invalid folder arguments surface as recoverable `Open in GPi failed` errors.
+- Validation: `npm run check`.
+- User manually validated: `Open in GPi` with GPi already running reuses the existing window.
 
 ### T012 — Add glass startup splash overlay
 

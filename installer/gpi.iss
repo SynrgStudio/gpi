@@ -4,7 +4,7 @@
 #define MyAppExeName "GPi.exe"
 #define MyAppVersion GetEnv("GPI_VERSION")
 #if MyAppVersion == ""
-  #define MyAppVersion "0.0.11"
+  #define MyAppVersion "0.0.12"
 #endif
 
 [Setup]
@@ -34,6 +34,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "openwithgpi"; Description: "Add ""Open in GPi"" to folder right-click menus"; GroupDescription: "Windows Explorer integration:"; Flags: unchecked
 
 [Files]
 Source: "..\release\GPi-win32-x64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -41,6 +42,14 @@ Source: "..\release\GPi-win32-x64\*"; DestDir: "{app}"; Flags: ignoreversion rec
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\Open in GPi"; ValueType: string; ValueData: "Open in GPi"; Flags: uninsdeletekey; Tasks: openwithgpi
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\Open in GPi"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekey; Tasks: openwithgpi
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\Open in GPi\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekey; Tasks: openwithgpi
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\Open in GPi"; ValueType: string; ValueData: "Open in GPi"; Flags: uninsdeletekey; Tasks: openwithgpi
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\Open in GPi"; ValueType: string; ValueName: "Icon"; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekey; Tasks: openwithgpi
+Root: HKCU; Subkey: "Software\Classes\Directory\Background\shell\Open in GPi\command"; ValueType: string; ValueData: """{app}\{#MyAppExeName}"" ""%V"""; Flags: uninsdeletekey; Tasks: openwithgpi
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: nowait postinstall skipifsilent

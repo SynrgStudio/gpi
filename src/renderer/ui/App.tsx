@@ -4,7 +4,7 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import gpiIconUrl from "../assets/gpi-icon.svg";
 import gitIconUrl from "../assets/git.svg";
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../../bridge/pi-bridge";
-import type { ChatMessage, ContinuityWorkflowStatus, GpiImageAttachment, GpiImageAttachmentResult, GpiProject, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
+import type { ChatMessage, ContinuityWorkflowStatus, GpiImageAttachment, GpiImageAttachmentResult, GpiOpenProjectRequest, GpiProject, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiReleaseNotes, GpiSessionSummary, GpiUpdateStatus, SessionStatus, TimelineEvent, TurnSnapshotIndex, TurnSnapshotIndexEntry, TurnSnapshotManifest, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillsStatus } from "../../domain/types";
 import {
   addOptimisticRealSession,
   addProjectToWorkspace,
@@ -27,6 +27,7 @@ import {
   renameSessionInWorkspace,
   replaceOptimisticSession,
   restoreSessionInWorkspace,
+  selectOrAddProjectByPath,
   selectProjectInWorkspace,
   selectSessionInWorkspace,
   toPersistedWorkspace,
@@ -421,6 +422,17 @@ export function App() {
     if (!window.gpi || !workspaceLoaded) return;
     void refreshWorkflowSkillsStatus(true);
     void refreshUpdateStatus();
+  }, [workspaceLoaded]);
+
+  useEffect(() => {
+    if (!window.gpi || !workspaceLoaded) return;
+
+    const handleOpenProjectRequest = (request: GpiOpenProjectRequest): void => openProjectRequest(request);
+    const unsubscribe = window.gpi.onOpenProjectRequest(handleOpenProjectRequest);
+    void window.gpi.getInitialOpenProjectRequest().then((request) => {
+      if (request) handleOpenProjectRequest(request);
+    });
+    return unsubscribe;
   }, [workspaceLoaded]);
 
   useEffect(() => {
@@ -963,6 +975,17 @@ export function App() {
     if (label === "Plan") sendPrompt(`/plan-cont${suffix}`);
     if (label === "Start") sendPrompt(`/start-cont${suffix}`);
     if (label === "End") sendPrompt(`/end-cont${suffix}`);
+  }
+
+  function openProjectRequest(request: GpiOpenProjectRequest): void {
+    if (!request.ok) {
+      setBridgeError(`Open in GPi failed: ${request.error}${request.path ? ` (${request.path})` : ""}`);
+      return;
+    }
+
+    const projectId = `project-${Date.now().toString(36)}`;
+    setBridgeError(undefined);
+    setWorkspace((current) => selectOrAddProjectByPath(current, { id: projectId, name: projectNameFromPath(request.path), path: request.path }));
   }
 
   async function addProjectFromPalette(): Promise<void> {

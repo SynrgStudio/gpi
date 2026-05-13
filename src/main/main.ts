@@ -1,13 +1,13 @@
 import { Menu, app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import { execFile, spawn } from "node:child_process";
 import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, normalize, relative, resolve } from "node:path";
+import { basename, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { SdkPiBridge } from "../bridge/sdk-pi-bridge.js";
 import { WorkerPiRuntimeManager } from "./worker-pi-runtime.js";
 import type { GpiPiSessionHandle } from "../bridge/pi-bridge.js";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiProjectGitLastCommit, GpiProjectGitStatus, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiOpenProjectRequest, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileEntry, GpiProjectFileListing, GpiProjectGitLastCommit, GpiProjectGitStatus, GpiReleaseNotes, GpiUpdateStatus, TurnSnapshotFileSaveInput, TurnSnapshotSaveRequest, WorkflowSkillName, WorkflowSkillStatus } from "../domain/types.js";
 import { TurnSnapshotStorage } from "./turn-snapshot-storage.js";
 import { WorkspaceStorage } from "./workspace-storage.js";
 
@@ -19,6 +19,8 @@ const workerRuntimeManager = new WorkerPiRuntimeManager(join(currentDir, "../wor
 const workspaceStorage = new WorkspaceStorage(app.getPath("userData"));
 const turnSnapshotStorage = new TurnSnapshotStorage(app.getPath("userData"));
 const sessionHandles = new Map<string, GpiPiSessionHandle>();
+let mainWindow: BrowserWindow | undefined;
+let initialOpenProjectRequest: GpiOpenProjectRequest | undefined;
 const WORKFLOW_SKILLS: readonly WorkflowSkillName[] = ["init-cont", "plan-cont", "start-cont", "end-cont"];
 const PRIMARY_PI_PACKAGE_NAME = "@earendil-works/pi-coding-agent";
 const LEGACY_PI_PACKAGE_NAME = "@mariozechner/pi-coding-agent";
@@ -60,6 +62,10 @@ async function createMainWindow(): Promise<void> {
       nodeIntegration: false,
     },
   });
+  mainWindow = window;
+  window.on("closed", () => {
+    if (mainWindow === window) mainWindow = undefined;
+  });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isExternalHttpUrl(url)) void shell.openExternal(url);
@@ -75,10 +81,12 @@ async function createMainWindow(): Promise<void> {
 
   if (isDevelopment) {
     await window.loadURL(process.env.GPI_DEV_SERVER_URL ?? "http://127.0.0.1:5173");
+    sendInitialOpenProjectRequest(window);
     return;
   }
 
   await window.loadFile(join(currentDir, "../renderer/index.html"));
+  sendInitialOpenProjectRequest(window);
 }
 
 function isExternalHttpUrl(url: string): boolean {
@@ -131,6 +139,7 @@ function registerIpc(window: BrowserWindow): void {
       return { ok: false, error: message };
     }
   });
+  ipcMain.handle("gpi:get-initial-open-project-request", () => initialOpenProjectRequest);
   ipcMain.handle("gpi:save-workspace", async (_event, workspace: unknown) => {
     if (!isWorkspacePayload(workspace)) throw new Error("Invalid GPi workspace payload");
     return workspaceStorage.save(workspace);
@@ -238,6 +247,55 @@ function registerIpc(window: BrowserWindow): void {
     await handle.abort();
     return { ok: true };
   });
+}
+
+function sendInitialOpenProjectRequest(window: BrowserWindow): void {
+  if (!initialOpenProjectRequest) return;
+  window.webContents.send("gpi:open-project-request", initialOpenProjectRequest);
+}
+
+async function sendOpenProjectRequestFromArgv(argv: string[]): Promise<void> {
+  const request = await openProjectRequestFromArgv(argv);
+  if (!request) return;
+
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    mainWindow.webContents.send("gpi:open-project-request", request);
+    return;
+  }
+
+  initialOpenProjectRequest = request;
+}
+
+async function openProjectRequestFromArgv(argv: string[]): Promise<GpiOpenProjectRequest | undefined> {
+  const folderArg = folderArgumentFromArgv(argv);
+  if (!folderArg) return undefined;
+
+  try {
+    const resolvedPath = resolve(folderArg);
+    const stats = await stat(resolvedPath);
+    if (!stats.isDirectory()) return { ok: false, path: resolvedPath, error: "Open in GPi expects a folder path." };
+    return { ok: true, path: resolvedPath };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { ok: false, path: folderArg, error: message };
+  }
+}
+
+function folderArgumentFromArgv(argv: string[]): string | undefined {
+  const candidates = argv.slice(app.isPackaged ? 1 : 2);
+  for (const candidate of candidates) {
+    const value = trimArgumentQuotes(candidate);
+    if (value.length === 0 || value.startsWith("-")) continue;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[a-zA-Z]:[\\/]/.test(value)) continue;
+    return value;
+  }
+  return undefined;
+}
+
+function trimArgumentQuotes(value: string): string {
+  return value.trim().replace(/^"(.*)"$/, "$1");
 }
 
 async function chooseImageAttachments(window: BrowserWindow): Promise<GpiImageAttachmentResult[]> {
@@ -1288,13 +1346,23 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: s
   }
 }
 
-app.whenReady().then(() => {
-  void createMainWindow();
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) void createMainWindow();
+const singleInstanceLock = app.requestSingleInstanceLock();
+if (!singleInstanceLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    void sendOpenProjectRequestFromArgv(argv);
   });
-});
+
+  app.whenReady().then(async () => {
+    initialOpenProjectRequest = await openProjectRequestFromArgv(process.argv);
+    await createMainWindow();
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) void createMainWindow();
+    });
+  });
+}
 
 app.on("window-all-closed", () => {
   for (const handle of sessionHandles.values()) handle.dispose();

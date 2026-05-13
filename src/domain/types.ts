@@ -106,6 +106,10 @@ export interface GpiProjectContext {
   checkedAt: number;
 }
 
+export type GpiOpenProjectRequest =
+  | { ok: true; path: string }
+  | { ok: false; error: string; path: string | undefined };
+
 export interface GpiImageAttachment {
   id: string;
   name: string;

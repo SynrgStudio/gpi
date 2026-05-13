@@ -24,6 +24,28 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.12] - 2026-05-13
+### Added
+
+- Added optional Windows Explorer `Open in GPi` folder context-menu registration in the installer.
+- Added launch-folder handling so GPi opens an existing project by path or creates a new empty project for unknown folders.
+
+### Changed
+
+- None.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.11] - 2026-05-12
 ### Added
 

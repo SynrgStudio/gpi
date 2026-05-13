@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-12 05:35
+updated_at: 2026-05-13 03:15
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
 ---
@@ -10,11 +10,11 @@ goal: Complete GPi roadmap items for file mentions, project file tree, Windows O
 
 ## Current status
 
-T001 through T009, T012, T018-T023, and T025 are done. T024, T026, and T027 are implemented but marked partial pending manual global-install/update/missing-runtime validation. Native image attachments are implemented, manually validated, and hardened for persistence. Existing roadmap tasks T010-T17 remain pending.
+T001 through T012, T018-T023, and T025 are done. T024, T026, and T027 are implemented but marked partial pending manual global-install/update/missing-runtime validation. Native image attachments are implemented, manually validated, and hardened for persistence. Windows `Open in GPi` is implemented and manually validated. Linux packaging tasks T013-T016 remain pending.
 
 ## Last checkpoint
 
-2026-05-12 04:25 — Unified runtime diagnostics and added missing-Pi real-session recovery.
+2026-05-13 03:15 — Windows `Open in GPi` installer registration and launch-folder handling manually validated successfully.
 
 ## Active continuity session
 
@@ -26,8 +26,9 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 ## Validation status
 
-- Not run after `/plan-cont`; markdown-only queue/state update.
-- Last known validation before planning: `npm run check` passed after updater/autoscroll/workflow changes.
+- `npm run check` passed after Windows Open in GPi changes.
+- Direct Inno Setup compile succeeded and produced `release/installer/GPi-Setup-0.0.11.exe`.
+- `npm run installer:win` timed out in the harness after packaging, but direct package/check plus direct installer compile succeeded.
 
 ## Known blockers
 
@@ -38,7 +39,7 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 ## Next recommended step
 
-Manual validation: inspect the new session-header project context badge/popover in clean, dirty, no-git, and conflicted/detached states if practical. Swap placeholder dot to the original Git diamond SVG when asset is available.
+Next executable roadmap area: Linux packaging tasks T013-T016, or finish manual runtime validations for T024/T026/T027 if a safe sandbox is available.
 
 ## Log
 
@@ -186,3 +187,19 @@ Manual validation: inspect the new session-header project context badge/popover 
 - Added changelog entry.
 - Validation: `npm run check`.
 - T028-T031 remain partial pending user manual UI/state validation.
+
+### 2026-05-13 03:05 — start-cont T010-T011 Windows Open in GPi
+
+- Added optional Inno Setup `openwithgpi` task for Windows Explorer integration.
+- Added HKCU registry entries for folder and folder-background right-click menus.
+- Context-menu command passes the selected folder path to `GPi.exe`.
+- Added single-instance handling: first launch consumes a folder argument; second launch forwards the folder request to the running GPi window.
+- Renderer opens existing projects by normalized path and selects the most recently selected visible session.
+- Unknown folders create a new project named from the folder basename with no sessions, leaving the user at the create-session state.
+- Invalid folder arguments show a recoverable `Open in GPi failed` error.
+- Added changelog entries.
+- Validation: `npm run check`; direct Inno Setup compile produced `release/installer/GPi-Setup-0.0.11.exe`.
+- User manually validated: right-click `Open in GPi` works for an existing GPi project.
+- User manually validated: right-click `Open in GPi` works for a folder that is not a repo and not yet a GPi project, creating an empty project with the folder name.
+- User manually validated: using `Open in GPi` while GPi is already open reuses the same existing window.
+- T010 and T011 marked done.

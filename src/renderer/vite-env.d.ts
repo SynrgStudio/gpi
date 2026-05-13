@@ -2,7 +2,7 @@
 
 import type { GpiCompactionOptions, GpiModelOptions, GpiPiEvent } from "../bridge/pi-bridge";
 import type { SdkPiBridgePrewarmSnapshot } from "../bridge/sdk-pi-bridge";
-import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
+import type { ContinuityWorkflowStatus, GpiAppUpdateDownloadResult, GpiAppUpdateInstallResult, GpiDiscoveredSession, GpiImageAttachment, GpiImageAttachmentInput, GpiImageAttachmentResult, GpiOpenExternalResult, GpiOpenProjectRequest, GpiPiInstallResult, GpiPiUpdateResult, GpiProjectContext, GpiProjectFileListing, GpiReleaseNotes, GpiUpdateStatus, GpiWorkspaceSnapshot, TurnSnapshotManifest, TurnSnapshotRevertResult, TurnSnapshotSaveRequest, TurnSnapshotSaveResult, WorkflowSkillName, WorkflowSkillsInstallResult, WorkflowSkillsStatus, WorkflowSkillsUpdateResult, WorkspaceState } from "../domain/types";
 
 interface GpiSessionHandleInfo {
   id: string;
@@ -38,6 +38,7 @@ interface GpiPreloadApi {
   revertTurnSnapshot(manifestPath: string): Promise<TurnSnapshotRevertResult>;
   chooseProjectPath(): Promise<{ path: string | undefined }>;
   validateProjectPath(projectPath: string): Promise<{ ok: boolean; error: string | undefined }>;
+  getInitialOpenProjectRequest(): Promise<GpiOpenProjectRequest | undefined>;
   listProjectSessions(projectId: string): Promise<GpiDiscoveredSession[]>;
   listProjectFiles(projectId: string): Promise<GpiProjectFileListing>;
   getProjectContext(projectId: string): Promise<GpiProjectContext>;
@@ -58,6 +59,7 @@ interface GpiPreloadApi {
   followUp(sessionHandleId: string, text: string, images?: GpiImageAttachment[]): Promise<{ ok: true }>;
   steer(sessionHandleId: string, text: string, images?: GpiImageAttachment[]): Promise<{ ok: true }>;
   abort(sessionHandleId: string): Promise<{ ok: true }>;
+  onOpenProjectRequest(listener: (request: GpiOpenProjectRequest) => void): () => void;
   onPiEvent(listener: (event: GpiPiEvent) => void): () => void;
 }
 
