@@ -311,6 +311,8 @@ export type TurnSnapshotRevertResult =
 export interface WorkspaceSettings {
   revertSafeEditsEnabled: boolean;
   projectFilesPanelVisible: boolean;
+  developerMode: boolean;
+  runWorkExpandedByDefault: boolean;
   piInstallOnboardingSeen: boolean;
   lastSeenAppVersion: string | undefined;
 }

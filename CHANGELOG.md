@@ -24,6 +24,27 @@ All notable GPi changes are documented here. Releases must move relevant entries
 
 - None.
 
+## [0.0.14] - 2026-05-14
+### Added
+
+- Added Interface settings for Developer mode and default Run Work expansion.
+
+### Changed
+
+- Normal mode no longer renders live tool-call argument streams by default, improving GPi responsiveness during Preparing Tool Call while keeping final Run Work details inspectable.
+
+### Fixed
+
+- None.
+
+### Packaging
+
+- None.
+
+### Known issues
+
+- None.
+
 ## [0.0.13] - 2026-05-13
 ### Added
 

@@ -1,8 +1,8 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-13 03:15
-planned_at: 2026-05-10 16:45
+updated_at: 2026-05-13 21:10
+planned_at: 2026-05-13 03:45
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
 ---
@@ -845,10 +845,10 @@ Next:
 
 ### T028 — Add read-only project context API
 
-Status: partial
+Status: done
 Claimed by: pi
 Started: 2026-05-12 05:15
-Last update: 2026-05-12 05:35
+Last update: 2026-05-13 03:30
 Scope:
 - Add a main-process API to collect read-only project context for the selected project.
 - Detect whether the project is inside a git work tree.
@@ -876,15 +876,14 @@ Notes:
 - Suggested commands: `git rev-parse --is-inside-work-tree`, `git status --porcelain=v1 --branch`, `git log -1 --pretty=format:%h%x00%s%x00%an%x00%ct`.
 - Implemented `gpi:get-project-context` IPC/preload API with git status and context-file detection.
 - Validation: `npm run check`.
-Next:
-- Manual validation in git/no-git/dirty projects.
+- User validated project context behavior in real GPi usage, including clean/dirty transitions and no-git/new-project display.
 
 ### T029 — Render git status badge in the session header
 
-Status: partial
+Status: done
 Claimed by: pi
 Started: 2026-05-12 05:20
-Last update: 2026-05-12 05:35
+Last update: 2026-05-13 03:30
 Scope:
 - Add a compact project-context badge in the chat/session header next to the session title area.
 - Use a colored placeholder dot for now; leave structure ready to swap in the original Git diamond SVG.
@@ -906,17 +905,16 @@ Depends on:
 - T028
 Notes:
 - Header placement is intentional: git status belongs to the active project/session context, not the composer.
-- Added session-header badge with placeholder colored dot and git branch/sync/dirty label.
+- Added session-header badge with Git logo and git branch/sync/dirty state.
 - Validation: `npm run check`.
-Next:
-- Manual visual validation and future Git diamond SVG swap.
+- User validated clean/dirty auto-refresh: deleting untracked files moved GPi from yellow changed state to green clean automatically.
 
 ### T030 — Add project context hover/click popover
 
-Status: partial
+Status: done
 Claimed by: pi
 Started: 2026-05-12 05:25
-Last update: 2026-05-12 05:35
+Last update: 2026-05-13 03:30
 Scope:
 - Add a GPi-styled popover anchored to the project-context badge.
 - Show git branch, repo state, ahead/behind, upstream, staged/modified/deleted/untracked/conflicted counts, last commit, and context-file presence.
@@ -937,17 +935,17 @@ Depends on:
 - T029
 Notes:
 - Visual reference: account/rate-limit style popover, but adapted to GPi glass surfaces.
-- Added hover/click popover with refresh action, git summary, working-tree counts, last commit, and context files.
+- Added hover/click popover with git summary, working-tree counts, last commit, and context files.
+- Removed manual refresh button in favor of automatic updates while visible/on project change.
 - Validation: `npm run check`.
-Next:
-- Manual hover/click/outside/Esc validation.
+- User validated popover content and badge behavior in installed app usage.
 
 ### T031 — Add project context recovery and polish pass
 
-Status: partial
+Status: done
 Claimed by: pi
 Started: 2026-05-12 05:30
-Last update: 2026-05-12 05:35
+Last update: 2026-05-13 03:30
 Scope:
 - Add concise diagnostics for git command failures, invalid project paths, detached HEAD, conflicts, missing upstream, and no git repository.
 - Ensure status copy avoids internal implementation terms.
@@ -973,5 +971,846 @@ Notes:
 - Split sync divergence and detached HEAD colors: blue for ahead/behind, violet for detached.
 - Added changelog entry.
 - Validation: `npm run check`.
-Next:
-- Manual inspection of available git states and SVG asset swap if provided.
+- Replaced placeholder with Git logo asset and added README attribution.
+- User accepted the project context surface as complete.
+
+### T032 — Audit Pi SDK/runtime support for session tree and metadata
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Inspect Pi SDK/session manager/session JSONL types for tree nodes, parent IDs, active branch, labels, tokens, costs, context usage, queue semantics, fork/clone APIs, export/share APIs, context file loading, tool allowlists, models, skills, extensions, and packages.
+- Document what can be implemented via SDK, what requires reading Pi session files, and what needs CLI/RPC fallback.
+- Keep this as an implementation-enabling audit, not a UI task.
+DoD:
+- A concise implementation note exists with supported/unsupported Pi APIs for tree, session info, queue, context, tools, settings, and extensibility.
+- Follow-up tasks have clear integration approach notes if discoveries change scope.
+Validation:
+- npm run check if code/docs build requires it; otherwise documentation-only review
+Files likely touched:
+- docs/implementation/future-pi-parity-roadmap.md
+- docs/implementation/pi-sdk-parity-audit.md
+Risk: medium
+Depends on:
+- none
+Notes:
+- This must happen before implementing tree/forks, read-only mode, tools visibility, extensions, or package manager features.
+
+### T033 — Add session status/details data contract
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add domain/preload/main/renderer contracts for detailed session status without changing the current statusbar visual.
+- Include current provider/model, thinking level, context usage, token/cache usage, cost, session ID, session file, message count, branch/node info if available, compaction status, auto-compaction status, and runtime handle status.
+- Return partial data gracefully when Pi SDK does not expose a field.
+DoD:
+- Renderer can request a normalized session details object for the selected session.
+- Missing fields show as unavailable rather than errors.
+- No visual changes are made to the compact statusbar in this task.
+Validation:
+- npm run check
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/bridge/sdk-pi-bridge.ts
+Risk: medium
+Depends on:
+- T032
+Notes:
+- This powers the clickable statusbar popover.
+
+### T034 — Add clickable statusbar session details popover
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Keep the existing composer/statusbar appearance unchanged.
+- Make the statusbar clickable/focusable.
+- Open a GPi-styled popover with granular session details from T033.
+- Follow the visual behavior of the Git popover: hover/click safe, clear sections, no noisy permanent UI.
+DoD:
+- Clicking the existing statusbar opens detailed session info.
+- Current statusbar text/layout remains visually consistent.
+- Popover handles unavailable token/cost/context data cleanly.
+Validation:
+- npm run check
+- manual: inspect statusbar popover in active, idle, imported, and no-session states
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T033
+Notes:
+- Do not add extra always-visible metrics to the statusbar.
+
+### T035 — Add compact session titlebar menu
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add a small session menu in the session title/header area without cluttering the header.
+- Include available actions: rename, show session info, open session file, open tree, compact, archive.
+- Include disabled/coming-soon placeholders only if they are not confusing; otherwise add actions as tasks become ready.
+DoD:
+- Session menu opens from the titlebar/header.
+- Existing rename/compact/archive functionality remains accessible.
+- Menu does not duplicate large permanent buttons in the main UI.
+Validation:
+- npm run check
+- manual: open menu, execute existing actions, no-session state
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: low
+Depends on:
+- none
+Notes:
+- Later tree/fork/export actions can attach to this menu.
+
+### T036 — Add steering/follow-up queue domain model
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Represent queued user messages distinctly as steering or follow-up in workspace state and/or session runtime state.
+- Preserve current prompt/follow-up behavior while adding explicit state for visible queued messages.
+- Define how queued messages persist or are restored after abort/session reload.
+DoD:
+- Workspace/domain types can represent pending steering/follow-up messages.
+- Reducers can add, edit, remove, activate, and clear queued messages.
+- Existing text/image prompt flows remain compatible.
+Validation:
+- npm run check
+- npm run test:unit if workspace reducers are changed
+Files likely touched:
+- src/domain/types.ts
+- src/renderer/state/workspace-store.ts
+- test/workspace-store.test.ts
+Risk: high
+Depends on:
+- T032
+Notes:
+- Follow-up should be sticky and activate after the current run finishes; steering should affect the active run.
+
+### T037 — Render sticky follow-up card while agent is busy
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Show queued follow-up as a sticky user card near the bottom of timeline/composer while the agent is running.
+- Include edit/remove actions.
+- Convert the follow-up into an active user message when Pi accepts it after the current run.
+DoD:
+- Follow-up card is visible but clearly pending.
+- Follow-up does not appear as active timeline content until it is delivered.
+- Editing/removing a pending follow-up works.
+Validation:
+- npm run check
+- manual: queue follow-up during a long run, edit/remove, let it activate after completion
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+- src/renderer/state/workspace-store.ts
+Risk: high
+Depends on:
+- T036
+Notes:
+- The card should feel like “next instruction”, not current-run steering.
+
+### T038 — Add explicit steering message UX
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Let the user send steering while a session is busy.
+- Render steering as a normal user message with a `Steering` label/badge.
+- Preserve image attachment support where Pi supports steering images.
+- Provide a clear toggle/action for users who do not remember Enter vs Alt+Enter semantics.
+DoD:
+- Steering messages are visually distinguishable from normal prompts and follow-ups.
+- Steering can be sent during active runs without breaking existing follow-up behavior.
+- Text-only and image steering paths continue to work where supported.
+Validation:
+- npm run check
+- manual: send steering during active run and confirm agent receives it as current-run guidance
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+- src/bridge/pi-bridge.ts
+- src/bridge/sdk-pi-bridge.ts
+Risk: high
+Depends on:
+- T036
+Notes:
+- Steering changes what is happening now; follow-up waits.
+
+### T039 — Add Pi session tree parsing/data model
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Parse Pi session JSONL tree entries into a normalized GPi tree model.
+- Capture node ID, parent ID, role, summary text, timestamps, labels/bookmarks if present, active branch/current node, and children.
+- Keep parsing read-only and resilient to unknown future record shapes.
+DoD:
+- GPi can produce a tree model for imported/real sessions with session files.
+- Flat sessions still render as a single branch.
+- Parse errors are recoverable and surfaced in session details/tree UI.
+Validation:
+- npm run check
+- targeted unit tests for tree parsing if parser helper is extracted
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/state/workspace-store.ts
+- test/*
+Risk: high
+Depends on:
+- T032
+Notes:
+- This is foundational for sidebar fork display, tree drawer, fork, clone, and export.
+
+### T040 — Render nested branch/fork preview in left session list
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Show a compact nested tree/fork preview inside each expanded session item in the left sidebar.
+- Keep it visually small and clean; do not turn the whole sidebar into a complex tree editor.
+- Highlight the active branch/node.
+DoD:
+- Sessions with forks show nested branch structure in the sidebar.
+- Sessions without forks remain visually simple.
+- Clicking tree items can select/preview a node when T041/T042 support exists; otherwise keep read-only.
+Validation:
+- npm run check
+- manual: session with forks, flat session, archived session, narrow sidebar
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T039
+Notes:
+- User explicitly wants fork structure visible inside the left session list.
+
+### T041 — Add full session tree drawer
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add a drawer/modal for detailed session tree inspection.
+- Include search/filter, active branch highlighting, node summaries, and clean empty/error states.
+- Open from session titlebar menu and/or sidebar branch icon.
+DoD:
+- User can inspect the full tree without replacing the main timeline permanently.
+- Drawer handles large trees with acceptable performance.
+- Search/filter works for node text/labels.
+Validation:
+- npm run check
+- manual: open drawer, search, inspect branches, close by Esc/outside/button
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T039
+Notes:
+- Keep active timeline focused on the selected branch.
+
+### T042 — Add jump/fork/clone branch actions
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Implement tree actions when Pi SDK/CLI support is confirmed: jump to node/branch, fork from current point, fork from selected node, clone active branch.
+- Add actions to session tree drawer and session titlebar menu.
+- Preserve full history; never destructively rewrite session files.
+DoD:
+- User can jump to an existing branch/node when supported.
+- User can fork/clone via GPi with clear confirmation and resulting session/branch selection.
+- Unsupported actions are disabled with explanatory copy.
+Validation:
+- npm run check
+- manual: fork from node, clone active branch, jump branch, verify original history preserved
+Files likely touched:
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/domain/types.ts
+Risk: high
+Depends on:
+- T041
+Notes:
+- This is the core Pi branching parity feature.
+
+### T043 — Add branch/session export and copy actions
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add export/copy actions after tree/fork semantics are available.
+- Support copy last assistant message.
+- Support export current branch and export full session tree if Pi exposes or GPi can safely generate it.
+- Defer public sharing unless Pi SDK/CLI support is clear.
+DoD:
+- Copy last assistant message works from session menu.
+- Export current branch and full tree produce clear local files or explain unsupported state.
+- Export does not mutate session state.
+Validation:
+- npm run check
+- manual: copy last response, export branch/tree and inspect output
+Files likely touched:
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+Risk: medium
+Depends on:
+- T042
+Notes:
+- User agreed this comes after tree/forks.
+
+### T044 — Add real Pi context-files chain API
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Detect the context files Pi actually considers: global `~/.pi/agent/AGENTS.md`, parent-chain `AGENTS.md`/`CLAUDE.md`, project `.pi/SYSTEM.md`, global system prompts, `APPEND_SYSTEM.md`, and `.pi/settings.json`.
+- Keep the API read-only and path-contained for project paths.
+- Distinguish loaded, present, missing, global, parent, project, and settings/system-prompt roles.
+DoD:
+- Renderer can request a structured context-files chain for the selected project.
+- Results reflect Pi's loading model more accurately than the current simple context-file flags.
+- Missing files are non-fatal and displayable.
+Validation:
+- npm run check
+- manual: projects with parent AGENTS.md, CLAUDE.md, .pi/settings.json, and no context files
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+Risk: medium
+Depends on:
+- T032
+Notes:
+- Current Git popover context file flags are partial; this adds a dedicated context popup data source.
+
+### T045 — Add context files header popover
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add a clean context-files icon/popover in the session header/titlebar area.
+- Show global, parent-chain, project, system prompt, append prompt, and settings files.
+- Include open-file and reload actions if supported.
+DoD:
+- User can see what context files Pi sees without opening Settings.
+- Popover is compact and visually consistent with Git popover.
+- Missing files appear muted, not alarming.
+Validation:
+- npm run check
+- manual: inspect context popover in projects with/without context files
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T044
+Notes:
+- This should sit near the Git/session header area, not in the composer.
+
+### T046 — Audit tool allowlist/read-only session support
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Inspect Pi SDK/session creation options for tool allowlists, disabling write/edit/bash tools, and extension/custom tool visibility.
+- Determine whether read-only mode can be enforced by SDK options, prompt policy only, or CLI/RPC fallback.
+- Document exact limitations before adding user-facing safety claims.
+DoD:
+- Implementation note states whether read-only/custom tool modes are enforceable.
+- Tasks T047/T048 have updated approach notes if needed.
+Validation:
+- documentation-only review; npm run check if docs tooling requires it
+Files likely touched:
+- docs/implementation/pi-sdk-parity-audit.md
+Risk: high
+Depends on:
+- T032
+Notes:
+- Do not claim read-only safety unless tool restrictions are actually enforceable.
+
+### T047 — Add read-only session mode
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add read-only option when creating a Pi session, if enforceable.
+- Show a `Read-only` badge in the session header/status surfaces.
+- Limit tools to safe read-only set such as read, grep, find, and ls when supported.
+- Preserve existing full-access session creation as default.
+DoD:
+- User can create a read-only Pi session.
+- Read-only sessions visibly communicate their restrictions.
+- Write/edit/mutating tool paths are blocked by actual runtime/tool configuration or clearly marked unsupported if not enforceable.
+Validation:
+- npm run check
+- manual: create read-only session, ask Pi to inspect files, ask Pi to edit and confirm it cannot
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T046
+Notes:
+- Safety claims must be accurate.
+
+### T048 — Add tools visibility surface
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Show available tools for the selected session: built-in, extension, package/custom tools where discoverable.
+- Include enabled/disabled state, source, risk category, and last-used metadata if available.
+- Surface this from session status popover/menu or Tools & Safety settings without cluttering main UI.
+DoD:
+- User can inspect what the agent can use in a session.
+- Read-only/custom modes show restricted tools clearly.
+- Unknown extension/custom tools are represented safely.
+Validation:
+- npm run check
+- manual: full-access session, read-only session, session with extension tools if available
+Files likely touched:
+- src/domain/types.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T046
+Notes:
+- This supports trust and safety, not tool execution itself.
+
+### T049 — Reorganize Settings into future-proof categories
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Refactor Settings navigation to support categories: Runtime, Updates, Interface, Sessions, Models, Scoped Models, Context, Skills, Extensions, Pi Packages, Tools & Safety, Keybindings, Continuity, Revert, Advanced.
+- Move existing settings into the appropriate categories without changing behavior.
+- Keep the settings UI clean for categories that are not implemented yet.
+DoD:
+- Existing Runtime/Updates/Interface/Revert/Continuity functionality still works.
+- New category structure can host upcoming features without a large rewrite.
+- Empty/future categories are hidden or clearly marked without noise.
+Validation:
+- npm run check
+- manual: open each existing settings category and verify behavior
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- none
+Notes:
+- This can happen before specific Settings features if it reduces future churn.
+
+### T050 — Add Scoped Models settings and composer filtering
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add a Scoped Models settings category with checkboxes for enabled models and enabled thinking levels.
+- Persist scoped model/thinking preferences in workspace/settings or Pi settings if appropriate.
+- Filter composer model selector to only show enabled scoped models and thinking levels.
+DoD:
+- User can enable/disable models and thinking levels in Settings.
+- Composer model selector respects scoped selections.
+- Existing model changing still works for enabled models.
+Validation:
+- npm run check
+- manual: disable model/thinking levels and confirm composer selector changes
+Files likely touched:
+- src/domain/types.ts
+- src/renderer/state/workspace-store.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T049
+Notes:
+- User explicitly wants Scoped Models as its own settings category.
+
+### T051 — Add Pi Account & Providers settings surface
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add Settings category for Pi-owned auth/provider status and actions.
+- Surface login/logout/config actions through Pi-supported flows where possible.
+- If SDK support is limited, show clear instructions and safe open-directory/open-command actions rather than reimplementing auth.
+DoD:
+- User can find where to manage Pi provider/auth state from GPi.
+- GPi does not store or mishandle provider secrets.
+- Unsupported provider status appears as instructions, not broken controls.
+Validation:
+- npm run check
+- manual: open settings, inspect provider/account surface, launch safe action if available
+Files likely touched:
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T049
+Notes:
+- Pi remains the authority for auth.
+
+### T052 — Add prompt templates discovery and runner UI
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Discover prompt templates from Pi-supported locations and/or documented config paths.
+- Add UI to list, preview, fill variables, insert into composer, run now, and save current prompt as template if safe.
+- Support `/template-name` style composer integration if practical.
+DoD:
+- User can browse prompt templates in GPi.
+- Template variables can be filled before insertion/run.
+- Running a template does not bypass normal composer/session behavior.
+Validation:
+- npm run check
+- manual: create template, fill variable, insert/run from GPi
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T049
+Notes:
+- Examples: review, refactor, tests, explain, release notes, debug, security review.
+
+### T053 — Add Skills settings category
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Show all available Pi skills, not only GPi continuity skills.
+- Group by bundled, global, project, and package skills.
+- Add enable/disable toggles when Pi supports it, or reflect config status read-only if not.
+- Preserve continuity skills as composer workflow controls.
+DoD:
+- User can inspect skill name, description, source, status, and conflicts/missing state.
+- Enable/disable behavior is accurate and does not break continuity controls.
+- Skill file open/reload actions are available where safe.
+Validation:
+- npm run check
+- manual: inspect bundled/global/project skills and toggle if supported
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T049
+Notes:
+- Continuity stays prominent because it is GPi workflow UX; other skills belong in Settings.
+
+### T054 — Add Keybindings settings category
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add Keybindings settings list with action names, current shortcut, default shortcut, editable shortcut input, reset action, and conflict detection.
+- Use configurable keybinding data, not hardcoded checks.
+- Include GPi actions first; Pi keybindings can be surfaced later if SDK/config supports it.
+DoD:
+- User can view and edit GPi keybindings.
+- Conflicts are detected before saving.
+- Defaults can be restored per action.
+Validation:
+- npm run check
+- manual: change shortcut, detect conflict, reset default
+Files likely touched:
+- src/domain/types.ts
+- src/renderer/state/workspace-store.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T049
+Notes:
+- Follow project rule: no hardcoded key checks for new features.
+
+### T055 — Audit Pi extensions exposure via SDK/runtime
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Inspect how Pi loads extensions and whether SDK/runtime exposes loaded extensions, contributed commands, tools, UI, errors, and enable/disable state.
+- Identify safe read-only first implementation if runtime exposure is limited.
+DoD:
+- Extension implementation plan is documented with exact SDK/config source.
+- Risks around arbitrary code and load errors are captured.
+Validation:
+- documentation-only review; npm run check if docs tooling requires it
+Files likely touched:
+- docs/implementation/pi-sdk-parity-audit.md
+Risk: medium
+Depends on:
+- T032
+Notes:
+- User agreed extensions belong in scope, but implementation depends on SDK capabilities.
+
+### T056 — Add Extensions settings category
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add Extensions settings surface showing name/source, enabled status, load status/errors, contributed tools, contributed commands, and UI contributions if available.
+- Provide enable/disable controls only if supported safely.
+DoD:
+- User can inspect loaded/available extensions and errors.
+- Extension-contributed tools/commands are visible where data exists.
+- Unsupported controls are absent or clearly disabled.
+Validation:
+- npm run check
+- manual: inspect settings with no extensions and with at least one extension if available
+Files likely touched:
+- src/domain/types.ts
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: medium
+Depends on:
+- T055
+Notes:
+- Do not execute/install third-party extension code without explicit user action.
+
+### T057 — Add Pi Packages manager design and safety foundation
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Add package manager data contract and safety UI foundation for installed package listing and dangerous actions.
+- Implement double-confirm modal pattern for install/update/remove actions involving third-party code.
+- Show package source, resources, and security warning before any install/update/remove operation.
+DoD:
+- Pi Packages settings can show installed package data if available or a safe empty state.
+- Double-confirm component exists and is reusable.
+- High-risk extension/package warnings are clear.
+Validation:
+- npm run check
+- manual: open Pi Packages settings, trigger/cancel double-confirm flow with a mock/no-op action
+Files likely touched:
+- src/domain/types.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T049
+- T055
+Notes:
+- User wants strong safety, potentially two separate confirmation modals.
+
+### T058 — Add Pi package install/update/remove actions
+
+Status: pending
+Claimed by:
+Started:
+Last update:
+Scope:
+- Wire Pi package commands for install, update, remove/list where safe and supported.
+- Support global and project-local package operations if Pi exposes them.
+- Require double confirmation before mutating package state.
+- Capture stdout/stderr/status and refresh package list after operations.
+DoD:
+- User can install, update, and remove Pi packages from GPi with explicit double confirmation.
+- Failed package operations are diagnosable and non-destructive.
+- Project-local vs global operation is clear.
+Validation:
+- npm run check
+- manual: run only with explicit approval using a safe test package or sandbox
+Files likely touched:
+- src/main/main.ts
+- src/preload/preload.cts
+- src/renderer/vite-env.d.ts
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: high
+Depends on:
+- T057
+Notes:
+- This mutates the Pi environment; do not run package installs automatically.
+
+### T059 — Suppress live Preparing Tool Call argument rendering
+
+Status: done
+Claimed by: current-agent
+Started: 2026-05-13 20:51
+Last update: 2026-05-13 21:10
+Scope:
+- Stop rendering `preparing_tool` streamed argument text expanded by default while the run is active.
+- Keep the phase card visible as a compact progress card with elapsed time and a count/summary when argument data exists.
+- Preserve full streamed argument text in timeline state so it is inspectable after the phase finishes.
+- Ensure thinking streams and assistant text streams keep their current behavior.
+DoD:
+- Active `Preparing tool call` cards stay collapsed/compact by default.
+- The card no longer displays JSON/tool arguments character-by-character during streaming.
+- After the phase finishes, expanding the card shows the captured argument stream.
+- Existing tool started/finished cards still show args/result/duration and diffs.
+Validation:
+- npm run check
+- manual: trigger a large `write` tool call and confirm preparing args are hidden during stream but available after completion
+Files likely touched:
+- src/renderer/ui/App.tsx
+- src/renderer/styles.css
+Risk: low
+Depends on:
+- none
+Notes:
+- This directly addresses the perceived GPi slowdown from live card rendering. It may reduce UI/render overhead, but not the model time spent generating tool-call arguments.
+- Implemented compact active `Preparing tool call` rendering: live argument text is hidden while streaming, but preserved for expansion after preparation finishes.
+- Added Settings → Interface → Developer mode to re-enable live tool-call stream rendering when explicit debugging transparency is needed.
+- Validation: `npm run check` passed.
+- User manually validated normal mode feels much faster and no longer pays the live stream UI cost.
+
+### T060 — Throttle and cap run-phase delta state updates
+
+Status: done
+Claimed by: current-agent
+Started: 2026-05-13 20:55
+Last update: 2026-05-13 21:10
+Scope:
+- Add buffering/throttling for high-frequency `tool_call_delta` updates before they mutate renderer workspace/timeline state.
+- Apply a safe display cap or summarized placeholder for very large preparing-tool streams while retaining full inspectable data where practical.
+- Avoid breaking thinking stream rendering or final assistant message streaming.
+- Measure whether fewer React state updates reduce lag during large write/edit tool calls.
+DoD:
+- Large tool-call argument streams do not cause per-character React updates.
+- Preparing-tool cards update at a bounded cadence or only at phase end.
+- Full or intentionally capped argument data is available after completion with clear copy if truncated.
+- No regression in normal text/thinking stream behavior.
+Validation:
+- npm run check
+- manual: compare large `write` before/after responsiveness and Run Work expansion behavior
+Files likely touched:
+- src/renderer/state/workspace-store.ts
+- src/renderer/ui/App.tsx
+- src/domain/types.ts
+Risk: medium
+Depends on:
+- T059
+Notes:
+- This is the real performance pass after the UX-only collapse. The bridge may still receive deltas, but renderer updates should be batched.
+- Implemented SDK bridge buffering for `toolcall_delta` events with a 120ms flush cadence and final flush at tool-call end/start boundaries.
+- Normal mode now drops live non-final `tool_call_delta` events before reducing workspace state, avoiding React timeline updates for argument streaming.
+- Developer mode keeps live throttled deltas visible for debugging.
+- Validation: `npm run check` passed.
+- User manually validated Developer mode off is much faster while expected model-side preparing time can still remain.
+
+### T061 — Add tool-call stream performance instrumentation
+
+Status: done
+Claimed by: current-agent
+Started: 2026-05-13 20:58
+Last update: 2026-05-13 21:10
+Scope:
+- Add lightweight diagnostics around `toolcall_start`, `toolcall_delta`, `toolcall_end`, `tool_execution_start`, and renderer timeline updates.
+- Capture delta count, byte count, elapsed preparing time, tool execution duration, and render/update cadence in debug/session details.
+- Keep diagnostics hidden from normal chat UI unless a debug/details surface is opened.
+DoD:
+- GPi can distinguish model argument-generation time from UI/render overhead for a tool call.
+- Diagnostics can explain cases like `Preparing tool call 35s` followed by `write 2ms`.
+- Normal timeline remains uncluttered.
+Validation:
+- npm run check
+- manual: run a large write/edit and inspect diagnostics/log details
+Files likely touched:
+- src/bridge/sdk-pi-bridge.ts
+- src/renderer/state/workspace-store.ts
+- src/renderer/ui/App.tsx
+Risk: medium
+Depends on:
+- T060
+Notes:
+- Useful to validate whether collapsed/buffered rendering improves real latency or only perceived responsiveness.
+- Added lightweight `tool_call_stream_stats` events with delta count, byte count, renderer update count, and preparing duration.
+- Diagnostics are only reduced into session details when Developer mode is enabled, so normal work UI stays uncluttered.
+- Validation: `npm run check` passed.
+- User manually validated normal mode behavior. Developer diagnostics remain available behind the toggle for future debugging.

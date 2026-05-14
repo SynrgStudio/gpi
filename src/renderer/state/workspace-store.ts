@@ -35,7 +35,7 @@ export const initialWorkspace: WorkspaceState = {
   archivedSessions: {},
   sessionSelectionRanks: {},
   turnSnapshots: {},
-  settings: { revertSafeEditsEnabled: false, projectFilesPanelVisible: true, piInstallOnboardingSeen: false, lastSeenAppVersion: undefined },
+  settings: { revertSafeEditsEnabled: false, projectFilesPanelVisible: true, developerMode: false, runWorkExpandedByDefault: false, piInstallOnboardingSeen: false, lastSeenAppVersion: undefined },
 };
 
 export function hydrateWorkspace(persisted: Partial<WorkspaceState> | undefined): WorkspaceState {
@@ -72,6 +72,14 @@ export function updateRevertSafeEditsSetting(workspace: WorkspaceState, enabled:
 
 export function updateProjectFilesPanelVisibleSetting(workspace: WorkspaceState, visible: boolean): WorkspaceState {
   return { ...workspace, settings: { ...workspace.settings, projectFilesPanelVisible: visible } };
+}
+
+export function updateDeveloperModeSetting(workspace: WorkspaceState, enabled: boolean): WorkspaceState {
+  return { ...workspace, settings: { ...workspace.settings, developerMode: enabled } };
+}
+
+export function updateRunWorkExpandedByDefaultSetting(workspace: WorkspaceState, enabled: boolean): WorkspaceState {
+  return { ...workspace, settings: { ...workspace.settings, runWorkExpandedByDefault: enabled } };
 }
 
 export function markRevertSafeTurn(workspace: WorkspaceState, _sessionId: string): WorkspaceState {
@@ -417,6 +425,8 @@ export function reducePiEvent(workspace: WorkspaceState, event: GpiPiEvent): Wor
       return { ...workspace, timelineEvents: appendRunPhaseDeltaTimelineEvent(workspace.timelineEvents, event.sessionId, "thinking", event.delta) };
     case "tool_call_delta":
       return { ...workspace, timelineEvents: appendRunPhaseDeltaTimelineEvent(workspace.timelineEvents, event.sessionId, "preparing_tool", event.delta) };
+    case "tool_call_stream_stats":
+      return { ...workspace, details: appendDetail(workspace.details, event.sessionId, `diagnostic: tool-call stream ${event.deltaCount.toString()} deltas, ${event.byteCount.toString()} bytes, ${event.flushCount.toString()} renderer updates${event.preparingDurationMs === undefined ? "" : `, preparing ${event.preparingDurationMs.toString()}ms`}`) };
     case "timing_mark":
       return { ...workspace, details: appendDetail(workspace.details, event.sessionId, `timing: ${event.mark} at ${event.timestamp.toString()}`) };
     case "text_delta":

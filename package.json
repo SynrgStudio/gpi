@@ -1,6 +1,6 @@
 {
   "name": "gpi",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "GPi: a glass cockpit GUI for Pi with first-class multi-project and multi-session workflows.",
   "type": "module",
   "main": "dist/main/main.js",

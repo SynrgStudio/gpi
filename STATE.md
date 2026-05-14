@@ -1,7 +1,7 @@
 ---
 continuity_session: CONT-2026-05-10-1630-gpi-roadmap
 created_at: 2026-05-10 16:30
-updated_at: 2026-05-13 03:15
+updated_at: 2026-05-13 21:10
 status: active
 goal: Complete GPi roadmap items for file mentions, project file tree, Windows Open in GPi context menu, startup splash, Linux packaging, updater validation, and workflow polish.
 ---
@@ -10,11 +10,11 @@ goal: Complete GPi roadmap items for file mentions, project file tree, Windows O
 
 ## Current status
 
-T001 through T012, T018-T023, and T025 are done. T024, T026, and T027 are implemented but marked partial pending manual global-install/update/missing-runtime validation. Native image attachments are implemented, manually validated, and hardened for persistence. Windows `Open in GPi` is implemented and manually validated. Linux packaging tasks T013-T016 remain pending.
+T001 through T012, T018-T023, T025, T028-T031, and T059-T061 are done. T024, T026, and T027 remain partial pending manual global-install/update/missing-runtime validation. Linux packaging tasks T013-T016 remain pending. Pi parity/cockpit tasks T032-T058 cover session tree/forks, statusbar details popover, steering/follow-up UX, session menu, context files, read-only/tools safety, Settings expansion, scoped models, templates, skills, extensions, keybindings, and Pi Packages. Tool-call streaming performance is validated: normal mode avoids live tool-call stream UI cost, while Developer mode keeps stream/debug visibility available.
 
 ## Last checkpoint
 
-2026-05-13 03:15 — Windows `Open in GPi` installer registration and launch-folder handling manually validated successfully.
+2026-05-13 21:10 — User validated Developer mode off feels much faster; T059-T061 marked done.
 
 ## Active continuity session
 
@@ -32,14 +32,13 @@ Complete GPi roadmap items for file mentions, project file tree, Windows Open in
 
 ## Known blockers
 
-- Windows context menu tasks require local installer/manual validation.
 - Linux packaging tasks require Linux runner/host validation.
 - Image attachment final validation requires a vision-capable configured model.
 - Pi install command should only be run after explicit user click/approval; package-manager/global install behavior may affect local PATH.
 
 ## Next recommended step
 
-Next executable roadmap area: Linux packaging tasks T013-T016, or finish manual runtime validations for T024/T026/T027 if a safe sandbox is available.
+Next executable task by queue order remains T013 Linux packaging. If prioritizing the Pi parity roadmap, first executable task is T032 — Audit Pi SDK/runtime support for session tree and metadata.
 
 ## Log
 
@@ -166,6 +165,7 @@ Next executable roadmap area: Linux packaging tasks T013-T016, or finish manual 
 - Legacy persisted local sessions are filtered during workspace hydration.
 - Validation: `npm run check`; `npm run test:unit`.
 - Pending manual validation: sandbox Install Pi, simulate missing Pi, and optionally validate `pi update`.
+- User chose to leave T024/T026/T027 pending for later because there is no time to test global install/update/missing-runtime behavior now.
 
 ### 2026-05-12 05:05 — plan-cont project context surface
 
@@ -186,7 +186,7 @@ Next executable roadmap area: Linux packaging tasks T013-T016, or finish manual 
 - Added hover/click project context popover with Refresh action, git summary, counts, last commit, and context files.
 - Added changelog entry.
 - Validation: `npm run check`.
-- T028-T031 remain partial pending user manual UI/state validation.
+- T028-T031 were later accepted after manual validation in real use.
 
 ### 2026-05-13 03:05 — start-cont T010-T011 Windows Open in GPi
 
@@ -203,3 +203,50 @@ Next executable roadmap area: Linux packaging tasks T013-T016, or finish manual 
 - User manually validated: right-click `Open in GPi` works for a folder that is not a repo and not yet a GPi project, creating an empty project with the folder name.
 - User manually validated: using `Open in GPi` while GPi is already open reuses the same existing window.
 - T010 and T011 marked done.
+
+### 2026-05-13 03:30 — project context surface accepted
+
+- User asked to leave T024/T026/T027 pending for later manual validation.
+- Marked T028-T031 done after real usage validation of the Git badge/popover, clean/dirty auto-refresh, no-git/new-project behavior, and Git logo presentation.
+- Next recommended implementation area is Linux packaging T013-T016.
+
+### 2026-05-13 03:45 — plan-cont Pi parity/cockpit roadmap
+
+- Read `docs/implementation/future-pi-parity-roadmap.md` and converted the agreed future implementation direction into executable queue tasks T032-T058.
+- Planned session cockpit work: session details/statusbar popover, session titlebar menu, steering/follow-up queue UX.
+- Planned Pi tree/fork parity: SDK audit, session tree parsing, nested sidebar branch preview, full tree drawer, jump/fork/clone actions, export/copy after tree semantics.
+- Planned context/safety work: real Pi context-files chain popup, read-only session mode, tools visibility.
+- Planned Settings expansion: future-proof categories, Scoped Models, Pi Account & Providers, Prompt Templates, Skills, Keybindings.
+- Planned extensibility/package work: SDK audit for extensions, Extensions settings, Pi Packages with double-confirm safety foundation and package install/update/remove actions.
+- Preserved existing done/partial/pending task statuses and did not renumber prior tasks.
+
+### 2026-05-13 20:50 — plan-cont Preparing Tool Call streaming performance
+
+- Inspected current GPi event path for `toolcall_delta`: SDK bridge emits deltas, workspace appends them to the open `preparing_tool` run phase, and `TimelineRunPhaseEvent` auto-expands active cards and renders the full `stream` detail.
+- Added T059 to keep active Preparing Tool Call cards compact/collapsed while preserving captured args for later inspection.
+- Added T060 to throttle/buffer high-frequency tool-call delta state updates and avoid per-character React rendering.
+- Added T061 to add lightweight diagnostics distinguishing model-side tool argument generation time from GPi UI/render overhead.
+- No implementation performed.
+
+### 2026-05-13 21:02 — start-cont T059-T061 Preparing Tool Call streaming
+
+- Implemented T059 in `src/renderer/ui/App.tsx`: active `Preparing tool call` cards no longer expand/render streamed argument JSON live; they show compact progress and keep captured args inspectable after preparation finishes.
+- Implemented T060 in `src/bridge/sdk-pi-bridge.ts`: `toolcall_delta` events are buffered and flushed every 120ms plus at tool-call boundaries, reducing renderer state updates during large write/edit argument generation.
+- Implemented T061 across `src/bridge/pi-bridge.ts`, `src/bridge/sdk-pi-bridge.ts`, and `src/renderer/state/workspace-store.ts`: added hidden session-detail diagnostics for tool-call delta count, byte count, flush/render update count, and preparing duration.
+- Validation: `npm run check` passed.
+- Marked T059-T061 partial because manual validation with a large GPi write/edit stream is still required.
+
+### 2026-05-13 21:06 — start-cont Developer mode for tool-call streams
+
+- Added `developerMode` workspace setting, persisted with existing settings hydration.
+- Added Settings → Interface → Developer mode toggle.
+- Normal mode now ignores live non-final `tool_call_delta` and tool-call diagnostic events before reducing workspace state, keeping the UI light during Preparing Tool Call.
+- Developer mode preserves live throttled tool-call stream rendering and diagnostics for debugging.
+- Final tool-call summary still reaches the timeline in normal mode so Run Work remains inspectable after the tool call completes.
+- Validation: `npm run check` passed.
+
+### 2026-05-13 21:10 — T059-T061 manual validation accepted
+
+- User validated GPi feels much faster with Developer mode off.
+- Remaining 15s Preparing Tool Call durations are expected model-side argument generation time and can also happen in Pi.
+- Marked T059-T061 done.

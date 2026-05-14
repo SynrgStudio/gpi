@@ -47,7 +47,8 @@ export type GpiPiEvent =
   | { type: "status_changed"; sessionId: string; status: SessionStatus }
   | { type: "run_phase"; sessionId: string; phase: "preparing_tool" | "working" | "thinking"; status: "started" | "finished"; timestamp: number }
   | { type: "thinking_delta"; sessionId: string; delta: string }
-  | { type: "tool_call_delta"; sessionId: string; delta: string; toolName?: string }
+  | { type: "tool_call_delta"; sessionId: string; delta: string; toolName?: string; final?: boolean }
+  | { type: "tool_call_stream_stats"; sessionId: string; deltaCount: number; byteCount: number; flushCount: number; preparingDurationMs: number | undefined }
   | { type: "timing_mark"; sessionId: string; mark: "agent_end" | "agent_start" | "first_text" | "first_thinking" | "first_tool" | "prompt_dispatched" | "worker_prompt_received"; timestamp: number; runId?: string }
   | { type: "text_delta"; sessionId: string; delta: string; responseMeta: string | undefined }
   | { type: "compaction_changed"; sessionId: string; options: GpiCompactionOptions; summary: string | undefined }

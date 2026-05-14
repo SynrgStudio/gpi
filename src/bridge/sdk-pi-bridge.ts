@@ -1,4 +1,5 @@
 import { createAgentSession, SessionManager } from "@earendil-works/pi-coding-agent";
+import { Buffer } from "node:buffer";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
@@ -10,6 +11,18 @@ import type { GpiDiscoveredSession, GpiImageAttachment, GpiWorkspaceSnapshot, Se
 import type { GpiCompactionOptions, GpiFileChangeHint, GpiFileDiffHint, GpiFileSnapshotHint, GpiModelInfo, GpiModelOptions, GpiPiBridge, GpiPiEvent, GpiPiSessionHandle } from "./pi-bridge.js";
 
 const execFileAsync = promisify(execFile);
+const TOOL_CALL_DELTA_FLUSH_MS = 120;
+
+interface ToolCallStreamStats {
+  deltaCount: number;
+  byteCount: number;
+  flushCount: number;
+  startedAt: number | undefined;
+}
+
+function emptyToolCallStreamStats(): ToolCallStreamStats {
+  return { deltaCount: 0, byteCount: 0, flushCount: 0, startedAt: undefined };
+}
 
 function toPiImages(images: GpiImageAttachment[]): ImageContent[] {
   return images.map((image) => ({ type: "image", data: image.data, mimeType: image.mimeType }));
@@ -38,6 +51,9 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
   private firstTextEmitted = false;
   private firstThinkingEmitted = false;
   private firstToolEmitted = false;
+  private pendingToolCallDelta = "";
+  private toolCallDeltaFlushTimer: ReturnType<typeof setTimeout> | undefined;
+  private toolCallStreamStats: ToolCallStreamStats = emptyToolCallStreamStats();
 
   readonly sessionFile: string | undefined;
 
@@ -131,6 +147,8 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
   }
 
   dispose(): void {
+    this.flushToolCallDelta();
+    if (this.toolCallDeltaFlushTimer) clearTimeout(this.toolCallDeltaFlushTimer);
     this.unsubscribe();
     this.listeners.clear();
     this.toolStarts.clear();
@@ -155,12 +173,14 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
         this.emitStatus("thinking");
         break;
       case "agent_end":
+        this.flushToolCallDelta();
         this.emit({ type: "timing_mark", sessionId: this.id, mark: "agent_end", timestamp: Date.now() });
         this.emit({ type: "run_phase", sessionId: this.id, phase: "thinking", status: "finished", timestamp: Date.now() });
         this.emitStatus("completed");
         this.emitSessionStats();
         break;
       case "tool_execution_start":
+        this.flushToolCallDelta();
         this.handleToolStart(event.toolCallId, event.toolName, event.args);
         break;
       case "tool_execution_end":
@@ -185,14 +205,18 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
           this.emit({ type: "run_phase", sessionId: this.id, phase: "thinking", status: "finished", timestamp: Date.now() });
         }
         if (event.assistantMessageEvent.type === "toolcall_start") {
+          this.flushToolCallDelta();
+          this.toolCallStreamStats = { ...emptyToolCallStreamStats(), startedAt: Date.now() };
           this.emit({ type: "run_phase", sessionId: this.id, phase: "thinking", status: "finished", timestamp: Date.now() });
           this.emit({ type: "run_phase", sessionId: this.id, phase: "preparing_tool", status: "started", timestamp: Date.now() });
         }
         if (event.assistantMessageEvent.type === "toolcall_delta") {
-          this.emit({ type: "tool_call_delta", sessionId: this.id, delta: event.assistantMessageEvent.delta });
+          this.bufferToolCallDelta(event.assistantMessageEvent.delta);
         }
         if (event.assistantMessageEvent.type === "toolcall_end") {
-          this.emit({ type: "tool_call_delta", sessionId: this.id, delta: summarizeToolCall(event.assistantMessageEvent.toolCall) });
+          this.flushToolCallDelta();
+          this.emit({ type: "tool_call_delta", sessionId: this.id, delta: summarizeToolCall(event.assistantMessageEvent.toolCall), final: true });
+          this.emitToolCallStreamStats();
         }
         if (event.assistantMessageEvent.type === "text_delta") {
           if (!this.firstTextEmitted) {
@@ -225,6 +249,46 @@ class SdkPiSessionHandle implements GpiPiSessionHandle {
       default:
         break;
     }
+  }
+
+  private bufferToolCallDelta(delta: string): void {
+    this.toolCallStreamStats = {
+      ...this.toolCallStreamStats,
+      deltaCount: this.toolCallStreamStats.deltaCount + 1,
+      byteCount: this.toolCallStreamStats.byteCount + Buffer.byteLength(delta, "utf8"),
+    };
+    this.pendingToolCallDelta += delta;
+    if (this.toolCallDeltaFlushTimer) return;
+    this.toolCallDeltaFlushTimer = setTimeout(() => {
+      this.toolCallDeltaFlushTimer = undefined;
+      this.flushToolCallDelta();
+    }, TOOL_CALL_DELTA_FLUSH_MS);
+  }
+
+  private flushToolCallDelta(): void {
+    if (this.toolCallDeltaFlushTimer) {
+      clearTimeout(this.toolCallDeltaFlushTimer);
+      this.toolCallDeltaFlushTimer = undefined;
+    }
+    if (this.pendingToolCallDelta.length === 0) return;
+    const delta = this.pendingToolCallDelta;
+    this.pendingToolCallDelta = "";
+    this.toolCallStreamStats = { ...this.toolCallStreamStats, flushCount: this.toolCallStreamStats.flushCount + 1 };
+    this.emit({ type: "tool_call_delta", sessionId: this.id, delta });
+  }
+
+  private emitToolCallStreamStats(): void {
+    if (this.toolCallStreamStats.deltaCount === 0 && this.toolCallStreamStats.startedAt === undefined) return;
+    const preparingDurationMs = this.toolCallStreamStats.startedAt === undefined ? undefined : Date.now() - this.toolCallStreamStats.startedAt;
+    this.emit({
+      type: "tool_call_stream_stats",
+      sessionId: this.id,
+      deltaCount: this.toolCallStreamStats.deltaCount,
+      byteCount: this.toolCallStreamStats.byteCount,
+      flushCount: this.toolCallStreamStats.flushCount,
+      preparingDurationMs,
+    });
+    this.toolCallStreamStats = emptyToolCallStreamStats();
   }
 
   private responseMeta(): string {

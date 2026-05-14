@@ -31,10 +31,12 @@ import {
   selectProjectInWorkspace,
   selectSessionInWorkspace,
   toPersistedWorkspace,
+  updateDeveloperModeSetting,
   updateDraftInWorkspace,
   updateProjectInWorkspace,
   updateProjectFilesPanelVisibleSetting,
   updateRevertSafeEditsSetting,
+  updateRunWorkExpandedByDefaultSetting,
 } from "../state/workspace-store";
 
 const originLabels = {
@@ -527,6 +529,8 @@ export function App() {
         queueTextDelta(event);
         return;
       }
+      if (event.type === "tool_call_delta" && !event.final && !workspaceRef.current.settings.developerMode) return;
+      if (event.type === "tool_call_stream_stats" && !workspaceRef.current.settings.developerMode) return;
       flushPendingTextDeltas();
       if (event.type === "compaction_changed") {
         setCompactionOptionsByHandle((current) => ({ ...current, [event.sessionId]: event.options }));
@@ -1516,6 +1520,8 @@ export function App() {
               onPreviewRevert={(snapshot) => void openRevertPreview(snapshot)}
               onCreateSession={() => void createPiSession(selectedProject)}
               selectedSessionStatus={selectedSession?.status}
+              developerMode={workspace.settings.developerMode}
+              runWorkExpandedByDefault={workspace.settings.runWorkExpandedByDefault}
             />
 
             {selectedSession ? (
@@ -1568,6 +1574,8 @@ export function App() {
           initialSection={settingsInitialSection}
           projectFilesPanelVisible={workspace.settings.projectFilesPanelVisible}
           revertSafeEditsEnabled={workspace.settings.revertSafeEditsEnabled}
+          developerMode={workspace.settings.developerMode}
+          runWorkExpandedByDefault={workspace.settings.runWorkExpandedByDefault}
           gpiUpdateDownloading={gpiUpdateDownloading}
           gpiUpdateInstallerReady={Boolean(gpiUpdateInstallerPath)}
           gpiUpdateMessage={gpiUpdateMessage}
@@ -1587,6 +1595,8 @@ export function App() {
           onProjectFilesPanelVisibleChange={(visible) => setWorkspace((current) => updateProjectFilesPanelVisibleSetting(current, visible))}
           onRefreshWorkflowSkills={() => void refreshSettingsStatus()}
           onRevertSafeEditsChange={(enabled) => setWorkspace((current) => updateRevertSafeEditsSetting(current, enabled))}
+          onDeveloperModeChange={(enabled) => setWorkspace((current) => updateDeveloperModeSetting(current, enabled))}
+          onRunWorkExpandedByDefaultChange={(enabled) => setWorkspace((current) => updateRunWorkExpandedByDefaultSetting(current, enabled))}
           onUpdateGpi={() => void updateGpiFromSettings()}
           onUpdatePi={() => void updatePiFromSettings()}
           onUpdateWorkflowSkills={() => void updateWorkflowSkills()}
@@ -2042,6 +2052,8 @@ function SettingsDialog(props: {
   initialSection: SettingsSection;
   projectFilesPanelVisible: boolean;
   revertSafeEditsEnabled: boolean;
+  developerMode: boolean;
+  runWorkExpandedByDefault: boolean;
   gpiUpdateDownloading: boolean;
   gpiUpdateInstallerReady: boolean;
   gpiUpdateMessage: string | undefined;
@@ -2061,6 +2073,8 @@ function SettingsDialog(props: {
   onProjectFilesPanelVisibleChange: (visible: boolean) => void;
   onRefreshWorkflowSkills: () => void;
   onRevertSafeEditsChange: (enabled: boolean) => void;
+  onDeveloperModeChange: (enabled: boolean) => void;
+  onRunWorkExpandedByDefaultChange: (enabled: boolean) => void;
   onUpdateGpi: () => void;
   onUpdatePi: () => void;
   onUpdateWorkflowSkills: () => void;
@@ -2206,6 +2220,14 @@ function SettingsDialog(props: {
                 <label className="settings-toggle-row">
                   <span><strong>Project file tree</strong><small>Show the read-only project file panel used for file mentions.</small></span>
                   <button className={props.projectFilesPanelVisible ? "settings-toggle active" : "settings-toggle"} onClick={() => props.onProjectFilesPanelVisibleChange(!props.projectFilesPanelVisible)} type="button">{props.projectFilesPanelVisible ? "On" : "Off"}</button>
+                </label>
+                <label className="settings-toggle-row">
+                  <span><strong>Developer mode</strong><small>Show live tool-call argument streams and diagnostics. Leave off for the fastest normal timeline.</small></span>
+                  <button className={props.developerMode ? "settings-toggle active" : "settings-toggle"} onClick={() => props.onDeveloperModeChange(!props.developerMode)} type="button">{props.developerMode ? "On" : "Off"}</button>
+                </label>
+                <label className="settings-toggle-row">
+                  <span><strong>Expand Run Work live</strong><small>Open Run Work cards by default while a run is active. Leave off to show only the compact timer until you expand it.</small></span>
+                  <button className={props.runWorkExpandedByDefault ? "settings-toggle active" : "settings-toggle"} onClick={() => props.onRunWorkExpandedByDefaultChange(!props.runWorkExpandedByDefault)} type="button">{props.runWorkExpandedByDefault ? "On" : "Off"}</button>
                 </label>
               </section>
             ) : null}
@@ -2940,6 +2962,8 @@ function selectableModels(options: GpiModelOptions | undefined): GpiModelOptions
 function MessageTimeline(props: {
   bridgeError: string | undefined;
   details: string[];
+  developerMode: boolean;
+  runWorkExpandedByDefault: boolean;
   hasSelectedProject: boolean;
   projectId: string | undefined;
   messages: ChatMessage[];
@@ -3021,7 +3045,7 @@ function MessageTimeline(props: {
           </div>
         ) : null}
         {props.timelineEvents.length > 0 ? (
-          <TypedTimelineEvents events={props.timelineEvents} status={props.selectedSessionStatus} turnSnapshots={props.turnSnapshots} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />
+          <TypedTimelineEvents developerMode={props.developerMode} runWorkExpandedByDefault={props.runWorkExpandedByDefault} events={props.timelineEvents} status={props.selectedSessionStatus} turnSnapshots={props.turnSnapshots} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />
         ) : (
           <LinearTimelineMessages details={props.details} messages={props.messages} onPreviewImage={props.onPreviewImage} projectId={props.projectId} selectedSessionId={props.selectedSessionId} status={props.selectedSessionStatus} />
         )}
@@ -3057,12 +3081,12 @@ function timelineAutoScrollSignal(events: TimelineEvent[]): string {
   }).join("|");
 }
 
-function TypedTimelineEvents(props: { events: TimelineEvent[]; status: SessionStatus | undefined; turnSnapshots: TurnSnapshotIndex; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
+function TypedTimelineEvents(props: { developerMode: boolean; runWorkExpandedByDefault: boolean; events: TimelineEvent[]; status: SessionStatus | undefined; turnSnapshots: TurnSnapshotIndex; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
   const events = useMemo(() => [...props.events].filter((event) => event.kind !== "stats").sort((a, b) => a.order - b.order), [props.events]);
   const grouped = useMemo(() => groupTimelineEvents(events), [events]);
   return (
     <>
-      {grouped.map((item) => item.kind === "single" ? <TypedTimelineEventBlock event={item.event} key={item.event.id} onPreviewImage={props.onPreviewImage} /> : <TimelineRunSupercard collapseWhenInactive={item.followedByAssistantMessage} events={item.events} key={`group-${item.turnId}`} snapshot={findTurnSnapshot(props.turnSnapshots, item.events)} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />)}
+      {grouped.map((item) => item.kind === "single" ? <TypedTimelineEventBlock developerMode={props.developerMode} event={item.event} key={item.event.id} onPreviewImage={props.onPreviewImage} /> : <TimelineRunSupercard collapseWhenInactive={item.followedByAssistantMessage} developerMode={props.developerMode} runWorkExpandedByDefault={props.runWorkExpandedByDefault} events={item.events} key={`group-${item.turnId}`} snapshot={findTurnSnapshot(props.turnSnapshots, item.events)} onPreviewImage={props.onPreviewImage} onPreviewRevert={props.onPreviewRevert} />)}
       {shouldShowLiveActivity(events, props.status) ? <TimelineLiveActivity status={props.status} /> : null}
     </>
   );
@@ -3109,9 +3133,10 @@ function findTurnSnapshot(turnSnapshots: TurnSnapshotIndex, events: TimelineEven
   return turnSnapshots[event.sessionId]?.[event.turnId];
 }
 
-function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: TimelineEvent[]; snapshot: TurnSnapshotIndexEntry | undefined; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
+function TimelineRunSupercard(props: { collapseWhenInactive: boolean; developerMode: boolean; runWorkExpandedByDefault: boolean; events: TimelineEvent[]; snapshot: TurnSnapshotIndexEntry | undefined; onPreviewImage: (image: GpiImageAttachment) => void; onPreviewRevert: (snapshot: TurnSnapshotIndexEntry) => void }) {
   const active = props.events.some((event) => isTimelineEventActive(event));
-  const [expanded, setExpanded] = useState(active);
+  const [, setTick] = useState(0);
+  const [expanded, setExpanded] = useState(active && props.runWorkExpandedByDefault);
   const tools = props.events.filter((event) => event.kind === "tool").length;
   const diffs = props.events.filter((event) => event.kind === "diff").length;
   const phases = props.events.filter((event) => event.kind === "run_phase").length;
@@ -3120,12 +3145,18 @@ function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: Ti
   const summary = `${active ? "Running" : "Completed"} · ${phases.toString()} phases · ${tools.toString()} tools · ${diffs.toString()} diffs · ${Math.max(0, Math.round((endedAt - startedAt) / 1000)).toString()}s`;
 
   useEffect(() => {
+    if (!active) return;
+    const interval = window.setInterval(() => setTick((current) => current + 1), 1_000);
+    return () => window.clearInterval(interval);
+  }, [active]);
+
+  useEffect(() => {
     if (active) {
-      setExpanded(true);
+      setExpanded(props.runWorkExpandedByDefault);
       return;
     }
     if (props.collapseWhenInactive) setExpanded(false);
-  }, [active, props.collapseWhenInactive]);
+  }, [active, props.collapseWhenInactive, props.runWorkExpandedByDefault]);
 
   return (
     <div className={`timeline-run-supercard ${expanded ? "expanded" : "collapsed"}`}>
@@ -3145,7 +3176,7 @@ function TimelineRunSupercard(props: { collapseWhenInactive: boolean; events: Ti
       </div>
       <div className="timeline-run-supercard-content" aria-hidden={!expanded}>
         <div className="timeline-run-supercard-body">
-          {props.events.map((event) => <TypedTimelineEventBlock event={event} key={event.id} onPreviewImage={props.onPreviewImage} />)}
+          {props.events.map((event) => <TypedTimelineEventBlock developerMode={props.developerMode} event={event} key={event.id} onPreviewImage={props.onPreviewImage} />)}
         </div>
       </div>
     </div>
@@ -3191,14 +3222,14 @@ function liveActivityCopy(status: SessionStatus): string {
   return "The run is active. GPi is waiting for Pi events.";
 }
 
-function TypedTimelineEventBlock(props: { event: TimelineEvent; onPreviewImage: (image: GpiImageAttachment) => void }) {
+function TypedTimelineEventBlock(props: { developerMode: boolean; event: TimelineEvent; onPreviewImage: (image: GpiImageAttachment) => void }) {
   const event = props.event;
   if (event.kind === "user_message") return <TimelineMessage message={{ id: event.id, role: "user", text: event.text, imageAttachments: event.imageAttachments }} onPreviewImage={props.onPreviewImage} />;
   if (event.kind === "assistant_message") return <TimelineMessage message={{ id: event.id, role: "assistant", text: event.text, responseMeta: event.responseMeta }} />;
   if (event.kind === "diff") return <TimelineDiffEvent event={event} />;
   if (event.kind === "tool") return <TimelineActionEvent event={event} title={event.toolName} eyebrow={event.status === "started" ? "Tool started" : event.isError ? "Tool error" : "Tool finished"} tone={event.isError ? "error" : event.status === "started" ? "active" : "success"} />;
   if (event.kind === "file_change") return <TimelineActionEvent event={event} title={event.path} eyebrow={`File ${event.status}`} tone="file" />;
-  if (event.kind === "run_phase") return <TimelineRunPhaseEvent event={event} />;
+  if (event.kind === "run_phase") return <TimelineRunPhaseEvent developerMode={props.developerMode} event={event} />;
   if (event.kind === "command") return <TimelineActionEvent event={event} title={event.command} eyebrow={event.status === "started" ? "Command started" : `Command finished${event.exitCode === undefined ? "" : ` · exit ${event.exitCode.toString()}`}`} tone={event.exitCode && event.exitCode !== 0 ? "error" : event.status === "started" ? "active" : "neutral"} />;
   if (event.kind === "stats") return <TimelineActionEvent event={event} title={event.summary} eyebrow="Session stats" tone="neutral" />;
   if (event.kind === "compaction") return <TimelineActionEvent event={event} title={event.summary} eyebrow={`Compaction ${event.status}`} tone={event.status === "failed" ? "error" : event.status === "finished" ? "success" : "neutral"} />;
@@ -3206,10 +3237,11 @@ function TypedTimelineEventBlock(props: { event: TimelineEvent; onPreviewImage: 
   return <TimelineActionEvent event={event} title={event.message} eyebrow="System" tone={event.tone === "warning" ? "warning" : event.tone === "success" ? "success" : "neutral"} />;
 }
 
-function TimelineRunPhaseEvent(props: { event: Extract<TimelineEvent, { kind: "run_phase" }> }) {
+function TimelineRunPhaseEvent(props: { developerMode: boolean; event: Extract<TimelineEvent, { kind: "run_phase" }> }) {
   const [, setTick] = useState(0);
   const active = props.event.status === "started";
-  const [expanded, setExpanded] = useState(active);
+  const suppressLivePreparingStream = active && props.event.phase === "preparing_tool" && !props.developerMode;
+  const [expanded, setExpanded] = useState(active && !suppressLivePreparingStream);
   useEffect(() => {
     if (!active) return;
     const interval = window.setInterval(() => setTick((current) => current + 1), 1_000);
@@ -3217,14 +3249,14 @@ function TimelineRunPhaseEvent(props: { event: Extract<TimelineEvent, { kind: "r
   }, [active]);
 
   useEffect(() => {
-    setExpanded(active);
-  }, [active]);
+    setExpanded(active && props.event.phase !== "preparing_tool");
+  }, [active, props.event.phase]);
 
   const elapsed = runPhaseDuration(props.event);
   const isThinking = props.event.phase === "thinking";
   const label = props.event.phase === "preparing_tool" ? "Preparing tool call" : isThinking ? "Thinking" : "Working";
   const title = `${label} ${elapsed}`;
-  const details = props.event.text ? [{ label: "stream", value: props.event.text }] : [];
+  const details = runPhaseDetails(props.event, suppressLivePreparingStream);
   return (
     <details className={`timeline-action-block tone-${active ? "active" : "neutral"}`} onToggle={(event) => setExpanded(event.currentTarget.open)} open={expanded}>
       <summary>
@@ -3295,6 +3327,15 @@ function TimelineDiffEvent(props: { event: Extract<TimelineEvent, { kind: "diff"
     </section>
   );
 }
+
+function runPhaseDetails(event: Extract<TimelineEvent, { kind: "run_phase" }>, suppressLivePreparingStream: boolean): Array<{ label: string; value: string }> {
+  if (!event.text || event.text.trim().length === 0) return [];
+  if (suppressLivePreparingStream) {
+    return [{ label: "stream", value: `Tool-call arguments hidden while streaming (${formatBytes(event.text.length)} captured). Expand after preparation finishes to inspect them.` }];
+  }
+  return [{ label: "stream", value: event.text }];
+}
+
 
 function timelineEventDetails(event: Exclude<TimelineEvent, Extract<TimelineEvent, { kind: "user_message" | "assistant_message" | "diff" }>>): Array<{ label: string; value: string }> {
   if (event.kind === "tool") {
